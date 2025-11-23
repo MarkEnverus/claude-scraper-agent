@@ -1,0 +1,40 @@
+{
+  "name": "scraper-dev",
+  "version": "1.0.0",
+  "description": "Automated scraper generation for PRT sourcing pipeline",
+  "author": "PRT Engineering",
+  "agents": [
+    {
+      "name": "scraper-generator",
+      "description": "Master orchestrator for scraper generation - interviews user and coordinates specialist agents",
+      "file": "agents/scraper-generator.md",
+      "color": "blue"
+    },
+    {
+      "name": "http-collector-generator",
+      "description": "Generates HTTP/REST API scrapers with authentication, retry logic, and validation",
+      "file": "agents/http-collector-generator.md",
+      "color": "green"
+    },
+    {
+      "name": "website-parser-generator",
+      "description": "Generates website parsing scrapers with BeautifulSoup or Playwright",
+      "file": "agents/website-parser-generator.md",
+      "color": "purple"
+    }
+  ],
+  "commands": [
+    {
+      "name": "create-scraper",
+      "description": "Interactive scraper generation workflow",
+      "file": "commands/create-scraper.md"
+    }
+  ],
+  "skills": [
+    {
+      "name": "scraper-creation",
+      "description": "Core scraper creation logic and templates",
+      "file": "skills/scraper-creation.md"
+    }
+  ]
+}
