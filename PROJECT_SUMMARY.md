@@ -8,7 +8,7 @@
 
 ## 🎯 Project Goal
 
-Automate the generation of production-ready data collection scrapers for the PRT sourcing pipeline using Claude Code agents.
+Automate the generation of production-ready data collection scrapers for data pipelines using Claude Code agents.
 
 ## ✅ What Was Delivered
 
@@ -101,7 +101,7 @@ Automate the generation of production-ready data collection scrapers for the PRT
 cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 
 # Install (replace path with your actual sourcing project path)
-./install.sh /Users/mark.johnson/Desktop/source/repos/enverus-pr/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 
 # Restart Claude Code
 
@@ -125,7 +125,7 @@ cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 
 ### 3. Kafka Notifications
 - **Retained:** Existing `ScraperNotificationMessage` pattern
-- **Topic Format:** `unrestricted-prt-raw-{env}.{source}.{dataset}.{version}`
+- **Topic Format:** `{prefix}-{env}.{source}.{dataset}.{version}`
 
 ### 4. JSON Structured Logging
 - **Format:** One JSON object per log line
@@ -175,7 +175,7 @@ export REDIS_PORT=6379
 export REDIS_DB=0
 
 # S3
-export S3_BUCKET=enverus-pr-ue1-cdr-unrestricted-prt-raw-prod
+export S3_BUCKET=your-s3-bucket-name
 export AWS_PROFILE=default
 
 # Kafka (optional)
@@ -206,7 +206,7 @@ pytest tests/ -v --cov=infrastructure
 ### Test Generated Scrapers
 
 ```bash
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 pytest sourcing/scraping/{source}/tests/ -v --cov
 ```
 
@@ -349,7 +349,7 @@ See `INSTALLATION_GUIDE.md` for common issues and solutions
 The Claude Scraper Agent v1.0 is complete and ready for installation. Run the install script, restart Claude Code, and start generating scrapers!
 
 ```bash
-./install.sh /path/to/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 ```
 
 Then in Claude Code:

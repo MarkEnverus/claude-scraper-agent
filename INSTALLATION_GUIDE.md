@@ -4,7 +4,7 @@
 cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 
 # Install to your sourcing project
-./install.sh /Users/mark.johnson/Desktop/source/repos/enverus-pr/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 
 # Restart Claude Code or reload plugins
 
@@ -46,7 +46,7 @@ cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 The install script copies infrastructure files to your sourcing project:
 
 ```bash
-./install.sh /path/to/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 ```
 
 This copies:
@@ -78,7 +78,7 @@ export REDIS_PORT=6379
 export REDIS_DB=0
 
 # S3
-export S3_BUCKET=enverus-pr-ue1-cdr-unrestricted-prt-raw-prod
+export S3_BUCKET=your-s3-bucket-name
 export AWS_PROFILE=default  # or use IAM role
 
 # Kafka (optional)
@@ -132,7 +132,7 @@ Restart Claude Code to load the new plugin, or use the plugin reload command if 
 export NYISO_API_KEY=your_key_here
 
 # Run tests
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 pytest sourcing/scraping/nyiso/tests/ -v --cov
 
 # Test the scraper
@@ -261,12 +261,12 @@ aws s3 ls s3://your-bucket-name/
 
 ```bash
 # Ensure infrastructure files are in the right location
-ls -la /path/to/pr.prt.sourcing/sourcing/scraping/commons/hash_registry.py
-ls -la /path/to/pr.prt.sourcing/sourcing/common/logging_json.py
-ls -la /path/to/pr.prt.sourcing/sourcing/scraping/commons/collection_framework.py
+ls -la /path/to/your-sourcing-project/sourcing/scraping/commons/hash_registry.py
+ls -la /path/to/your-sourcing-project/sourcing/common/logging_json.py
+ls -la /path/to/your-sourcing-project/sourcing/scraping/commons/collection_framework.py
 
 # Check Python path
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 python -c "from sourcing.scraping.commons.hash_registry import HashRegistry; print('OK')"
 ```
 
@@ -274,7 +274,7 @@ python -c "from sourcing.scraping.commons.hash_registry import HashRegistry; pri
 
 ```bash
 # Run linting
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 ruff check sourcing/scraping/{source}/
 
 # Run tests
@@ -308,7 +308,7 @@ open htmlcov/index.html
 ### Test Generated Scrapers
 
 ```bash
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 
 # Run scraper tests
 pytest sourcing/scraping/{source}/tests/ -v

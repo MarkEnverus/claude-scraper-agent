@@ -1,8 +1,8 @@
 {
   "name": "scraper-dev",
   "version": "1.0.0",
-  "description": "Automated scraper generation for PRT sourcing pipeline",
-  "author": "PRT Engineering",
+  "description": "Automated scraper generation for data collection pipelines",
+  "author": "Claude Scraper Agent",
   "agents": [
     {
       "name": "scraper-generator",
@@ -21,6 +21,18 @@
       "description": "Generates website parsing scrapers with BeautifulSoup or Playwright",
       "file": "agents/website-parser-generator.md",
       "color": "purple"
+    },
+    {
+      "name": "ftp-collector-generator",
+      "description": "Generates FTP/SFTP file download scrapers with directory listing and file filtering",
+      "file": "agents/ftp-collector-generator.md",
+      "color": "orange"
+    },
+    {
+      "name": "email-collector-generator",
+      "description": "Generates email attachment download scrapers with IMAP/POP3 support",
+      "file": "agents/email-collector-generator.md",
+      "color": "cyan"
     }
   ],
   "commands": [

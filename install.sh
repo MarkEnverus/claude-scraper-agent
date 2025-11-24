@@ -12,10 +12,10 @@ echo ""
 
 # Check if sourcing project path is provided
 if [ -z "$1" ]; then
-    echo "Usage: ./install.sh /path/to/pr.prt.sourcing"
+    echo "Usage: ./install.sh /path/to/your-sourcing-project"
     echo ""
     echo "Example:"
-    echo "  ./install.sh /Users/mark.johnson/Desktop/source/repos/enverus-pr/pr.prt.sourcing"
+    echo "  ./install.sh /Users/username/projects/my-sourcing-project"
     exit 1
 fi
 

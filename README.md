@@ -1,6 +1,6 @@
 # Claude Scraper Agent v1.0
 
-Automated scraper generation system for PRT sourcing pipeline using Claude Code.
+Automated scraper generation system for data collection pipelines using Claude Code.
 
 ## Overview
 
@@ -37,7 +37,7 @@ claude_scraper_agent/
 Copy infrastructure code to your sourcing project:
 
 ```bash
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 cp claude_scraper_agent/infrastructure/hash_registry.py sourcing/scraping/commons/
 cp claude_scraper_agent/infrastructure/logging_json.py sourcing/common/
 cp claude_scraper_agent/infrastructure/collection_framework.py sourcing/scraping/commons/
@@ -46,7 +46,7 @@ cp claude_scraper_agent/infrastructure/collection_framework.py sourcing/scraping
 Or use the install script:
 
 ```bash
-./install.sh /path/to/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 ```
 
 ### Step 2: Install Plugin
@@ -153,7 +153,7 @@ export REDIS_PORT=6379
 export REDIS_DB=0
 
 # S3
-export S3_BUCKET=enverus-pr-ue1-cdr-unrestricted-prt-raw-prod
+export S3_BUCKET=your-s3-bucket-name
 export AWS_PROFILE=default  # or use IAM role
 
 # Kafka (optional)
@@ -231,7 +231,7 @@ class MyCollector(BaseCollector):
 
 ## License
 
-Internal - Enverus PRT Engineering
+MIT License
 
 ---
 

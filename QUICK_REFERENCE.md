@@ -4,7 +4,7 @@
 
 ```bash
 cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
-./install.sh /Users/mark.johnson/Desktop/source/repos/enverus-pr/pr.prt.sourcing
+./install.sh /path/to/your-sourcing-project
 # Restart Claude Code
 ```
 
@@ -20,14 +20,14 @@ Answer 7 questions → Agent generates complete scraper
 ```bash
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
-export S3_BUCKET=enverus-pr-ue1-cdr-unrestricted-prt-raw-prod
+export S3_BUCKET=your-s3-bucket-name
 export NYISO_API_KEY=your_key  # Replace with actual source
 ```
 
 ## Test Generated Scraper
 
 ```bash
-cd /path/to/pr.prt.sourcing
+cd /path/to/your-sourcing-project
 pytest sourcing/scraping/{source}/tests/ -v
 python sourcing/scraping/{source}/scraper_{source}_{type}_http.py \
   --start-date 2025-01-20 --end-date 2025-01-21 --environment dev

@@ -10,7 +10,7 @@ tools:
 
 # HTTP Collector Generator Agent
 
-You are the HTTP/REST API Scraper Specialist. You generate production-ready scrapers for HTTP/REST APIs following established patterns from the PRT sourcing codebase.
+You are the HTTP/REST API Scraper Specialist. You generate production-ready scrapers for HTTP/REST APIs following established data collection patterns.
 
 ## Your Inputs (From Master Agent)
 
@@ -198,7 +198,7 @@ def main(api_key, start_date, end_date, environment, force, skip_hash_check, kaf
     # Run collection
     collector = {SourceCamelCase}{TypeCamelCase}Collector(
         api_key=api_key,
-        s3_bucket=os.getenv("S3_BUCKET", "enverus-pr-ue1-cdr-unrestricted-prt-raw-prod"),
+        s3_bucket=os.getenv("S3_BUCKET"),
         s3_prefix="sourcing",
         redis_client=redis_client,
         environment=environment,
