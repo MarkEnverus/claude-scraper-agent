@@ -26,17 +26,14 @@ claude_scraper_agent/
 │   └── skills/
 ├── tests/                   # Unit tests
 ├── examples/                # Example generated scrapers
-├── docs/                    # Documentation
-└── install.sh               # Installation script
+└── docs/                    # Documentation
 ```
 
 ## Installation
 
-**Quick Start:** See [INSTALLATION.md](INSTALLATION.md) for detailed installation guide.
+### Method 1: Install from Marketplace (Recommended)
 
-### Method 1: Direct Install from GitHub (Easiest)
-
-Install the Claude Code plugin directly from the repository:
+Install the Claude Code plugin directly from the marketplace:
 
 ```bash
 # Add the marketplace
@@ -44,69 +41,17 @@ claude plugin marketplace add https://github.com/yourusername/claude_scraper_age
 
 # Install the plugin
 claude plugin install scraper-dev@scraper-agent-marketplace
-
-# Restart Claude Code
 ```
 
 **That's it!** Infrastructure files are automatically installed when you first run `/create-scraper`.
 
-### Method 2: Clone and Install Script (Recommended for Development)
+### Method 2: Install via GitHub URL
 
-Clone and run the installation script:
+Install directly from the GitHub repository:
 
 ```bash
-# Clone the repository
-git clone https://github.com/yourusername/claude_scraper_agent.git
-cd claude_scraper_agent
-
-# Install infrastructure + plugin
-./install.sh /path/to/your-sourcing-project
-
-# Or install plugin only (if infrastructure already exists)
-./install.sh --plugin-only
-```
-
-The script will:
-- Copy infrastructure files to your sourcing project
-- Install the Claude Code plugin
-- Register the plugin with Claude Code
-- Verify the installation
-
-### Manual Installation
-
-If you prefer manual installation:
-
-**Step 1: Install Infrastructure**
-```bash
-cd /path/to/your-sourcing-project
-mkdir -p sourcing/scraping/commons sourcing/common
-cp claude_scraper_agent/infrastructure/hash_registry.py sourcing/scraping/commons/
-cp claude_scraper_agent/infrastructure/logging_json.py sourcing/common/
-cp claude_scraper_agent/infrastructure/collection_framework.py sourcing/scraping/commons/
-```
-
-**Step 2: Install Plugin**
-```bash
-mkdir -p ~/.claude/plugins/scraper-dev
-cp -r claude_scraper_agent/plugin/* ~/.claude/plugins/scraper-dev/
-```
-
-**Step 3: Register Plugin**
-
-Edit `~/.claude/plugins/installed_plugins.json` and add:
-```json
-{
-  "version": 1,
-  "plugins": {
-    "scraper-dev": {
-      "version": "1.0.0",
-      "installedAt": "2025-12-01T00:00:00.000Z",
-      "lastUpdated": "2025-12-01T00:00:00.000Z",
-      "installPath": "/Users/yourusername/.claude/plugins/scraper-dev",
-      "isLocal": true
-    }
-  }
-}
+# Install the plugin using the GitHub URL
+claude plugin install https://github.com/yourusername/claude_scraper_agent
 ```
 
 ### Verify Installation
@@ -114,6 +59,8 @@ Edit `~/.claude/plugins/installed_plugins.json` and add:
 1. **Restart Claude Code** (close and reopen terminal)
 2. Type `/create-scraper` - command should autocomplete
 3. If available, the plugin is installed correctly
+
+For detailed installation instructions and troubleshooting, see [INSTALLATION.md](INSTALLATION.md).
 
 ## Usage
 

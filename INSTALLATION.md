@@ -6,12 +6,21 @@ The fastest way to get started with Claude Scraper Agent:
 
 ### 1. Install the Plugin
 
+**Method 1: Install from Marketplace (Recommended)**
+
 ```bash
 # Add the marketplace to Claude Code
 claude plugin marketplace add https://github.com/yourusername/claude_scraper_agent
 
 # Install the plugin
 claude plugin install scraper-dev@scraper-agent-marketplace
+```
+
+**Method 2: Install via GitHub URL**
+
+```bash
+# Install directly from GitHub
+claude plugin install https://github.com/yourusername/claude_scraper_agent
 ```
 
 Infrastructure files are bundled in the plugin and auto-installed on first use!
@@ -40,45 +49,6 @@ The agent will:
 1. Check if infrastructure files exist in your project
 2. Auto-install them if missing
 3. Start the interactive scraper generation wizard
-
----
-
-## Alternative Installation Methods
-
-### Method 1: URL Install (Production Use)
-
-**Best for:** Users who want the latest stable version
-
-```bash
-# Plugin installation
-claude plugin marketplace add https://github.com/yourusername/claude_scraper_agent
-claude plugin install scraper-dev@scraper-agent-marketplace
-
-# Restart Claude Code and run /create-scraper
-# Infrastructure auto-installs on first use!
-```
-
-### Method 2: Clone and Script (Development)
-
-**Best for:** Developers who want to modify or contribute
-
-```bash
-# Clone repository
-git clone https://github.com/yourusername/claude_scraper_agent.git
-cd claude_scraper_agent
-
-# Install everything
-./install.sh /path/to/your-sourcing-project
-
-# Or plugin only
-./install.sh --plugin-only
-```
-
-### Method 3: Manual Installation (Advanced)
-
-**Best for:** Custom deployment scenarios
-
-See [README.md](README.md#manual-installation) for detailed manual installation steps.
 
 ---
 
@@ -175,10 +145,7 @@ claude plugin install scraper-dev@scraper-agent-marketplace
 
 ### Update Infrastructure Files
 
-Re-run the infrastructure installer:
-```bash
-curl -fsSL https://raw.githubusercontent.com/yourusername/claude_scraper_agent/main/install-infrastructure.sh | bash -s /path/to/project
-```
+Infrastructure files are bundled with the plugin and updated automatically when you update the plugin.
 
 ---
 
@@ -187,13 +154,7 @@ curl -fsSL https://raw.githubusercontent.com/yourusername/claude_scraper_agent/m
 ### Remove Plugin
 
 ```bash
-# Using uninstall script (if cloned)
-cd claude_scraper_agent
-./uninstall.sh
-
-# Or manually
 claude plugin uninstall scraper-dev
-rm -rf ~/.claude/plugins/scraper-dev
 ```
 
 ### Remove Infrastructure Files
