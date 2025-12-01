@@ -10,7 +10,7 @@ The fastest way to get started with Claude Scraper Agent:
 
 ```bash
 # Add the marketplace to Claude Code
-claude plugin marketplace add https://github.com/yourusername/claude_scraper_agent
+claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
 
 # Install the plugin
 claude plugin install scraper-dev@scraper-agent-marketplace
@@ -19,8 +19,11 @@ claude plugin install scraper-dev@scraper-agent-marketplace
 **Method 2: Install via GitHub URL**
 
 ```bash
-# Install directly from GitHub
-claude plugin install https://github.com/yourusername/claude_scraper_agent
+# Add the GitHub repository as a marketplace
+claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
+
+# Install the plugin
+claude plugin install scraper-dev@scraper-agent-marketplace
 ```
 
 Infrastructure files are bundled in the plugin and auto-installed on first use!

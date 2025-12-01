@@ -37,7 +37,7 @@ Install the Claude Code plugin directly from the marketplace:
 
 ```bash
 # Add the marketplace
-claude plugin marketplace add https://github.com/yourusername/claude_scraper_agent
+claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
 
 # Install the plugin
 claude plugin install scraper-dev@scraper-agent-marketplace
@@ -50,8 +50,11 @@ claude plugin install scraper-dev@scraper-agent-marketplace
 Install directly from the GitHub repository:
 
 ```bash
-# Install the plugin using the GitHub URL
-claude plugin install https://github.com/yourusername/claude_scraper_agent
+# Add the GitHub repository as a marketplace
+claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
+
+# Install the plugin
+claude plugin install scraper-dev@scraper-agent-marketplace
 ```
 
 ### Verify Installation
