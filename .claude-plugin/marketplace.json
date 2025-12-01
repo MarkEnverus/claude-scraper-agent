@@ -1,0 +1,23 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "scraper-agent-marketplace",
+  "version": "1.0.0",
+  "description": "Automated scraper generation system for data collection pipelines",
+  "owner": {
+    "name": "Mark Johnson",
+    "email": "mark.johnson@example.com"
+  },
+  "plugins": [
+    {
+      "name": "scraper-dev",
+      "description": "Automated scraper generation for data collection pipelines with support for HTTP/REST APIs, website parsing, FTP/SFTP, and email attachments",
+      "version": "1.0.0",
+      "author": {
+        "name": "Mark Johnson",
+        "email": "mark.johnson@example.com"
+      },
+      "source": "./plugin",
+      "category": "development"
+    }
+  ]
+}
