@@ -66,7 +66,6 @@ import email
 import imaplib
 from datetime import datetime, date, timedelta
 from typing import List, Dict, Any, Optional
-from dataclasses import dataclass
 import logging
 
 import click
@@ -102,7 +101,7 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         environment: str = "dev",
         kafka_connection_string: Optional[str] = None,
         use_ssl: bool = True
-    ):
+    ) -> None:
         """
         Initialize Email collector.
 

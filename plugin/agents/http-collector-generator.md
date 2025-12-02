@@ -100,7 +100,7 @@ Authentication: {AUTH_METHOD}
 
 import os
 from datetime import datetime, timedelta, date
-from typing import List
+from typing import List, Dict, Any, Optional
 import requests
 import click
 import redis
@@ -116,10 +116,10 @@ logger = setup_logging()
 class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
     """Collector for {SOURCE} {DATA_TYPE} data."""
 
-    def __init__(self, api_key: str, **kwargs):
+    def __init__(self, api_key: str, **kwargs: Any) -> None:
         super().__init__(dgroup="{source_snake}_{type_snake}", **kwargs)
-        self.api_key = api_key
-        self.base_url = "{BASE_URL}"
+        self.api_key: str = api_key
+        self.base_url: str = "{BASE_URL}"
 
     def generate_candidates(
         self,
@@ -190,7 +190,16 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
 @click.option("--skip-hash-check", is_flag=True, help="Skip hash deduplication")
 @click.option("--kafka-connection-string", envvar="KAFKA_CONNECTION_STRING")
 @click.option("--log-level", default="INFO", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]))
-def main(api_key, start_date, end_date, environment, force, skip_hash_check, kafka_connection_string, log_level):
+def main(
+    api_key: str,
+    start_date: datetime,
+    end_date: datetime,
+    environment: str,
+    force: bool,
+    skip_hash_check: bool,
+    kafka_connection_string: Optional[str],
+    log_level: str
+) -> None:
     """Collect {SOURCE} {DATA_TYPE} data."""
 
     # Setup logging

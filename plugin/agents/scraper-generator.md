@@ -353,7 +353,74 @@ After specialist completes, verify:
 - ✅ Test file created with fixtures
 - ✅ README documentation generated
 - ✅ All imports are correct
-- ✅ Code passes linting (run `ruff check` if available)
+
+## Code Quality Checks (Auto-run After Generation)
+
+After the specialist completes and basic validation passes, automatically run quality checks:
+
+1. **Check if pyproject.toml exists in project root**
+   ```bash
+   ls pyproject.toml 2>/dev/null
+   ```
+
+   If missing:
+   - Inform user: "No pyproject.toml found. Installing code quality configuration..."
+   - Use Read tool: `${CLAUDE_PLUGIN_ROOT}/infrastructure/pyproject.toml.template`
+   - Use Write tool to create `pyproject.toml` in project root
+   - Report: "✅ Installed pyproject.toml with mypy and ruff configuration"
+
+2. **Invoke Code Quality Checker**
+
+   Use Task tool with subagent_type='code-quality-checker':
+   ```python
+   Task(
+       subagent_type='code-quality-checker',
+       description='Check quality of generated scraper',
+       prompt=f"""
+       Run mypy and ruff checks on the generated scraper:
+
+       File: {scraper_file_path}
+
+       Process:
+       1. Check if mypy and ruff are installed
+       2. Run mypy type checking
+       3. Run ruff style checking
+       4. Report results
+       5. Offer to auto-fix any issues
+       6. Re-run checks after fixes
+
+       Only complete when checks pass or user approves remaining issues.
+       """
+   )
+   ```
+
+3. **Report Final Status**
+
+   After quality checker completes:
+   - ✅ All quality checks passed - code is type-safe and style-compliant
+   - ⚠️  Some issues remain - user acknowledged
+   - ❌ Quality checks failed - manual intervention needed
+
+Example final output:
+```
+✅ Scraper generated successfully!
+
+**Files Created:**
+- sourcing/scraping/nyiso/scraper_nyiso_load_http.py (245 lines)
+- sourcing/scraping/nyiso/tests/test_scraper_nyiso_load_http.py (180 lines)
+- sourcing/scraping/nyiso/tests/fixtures/sample_response.json
+- sourcing/scraping/nyiso/README.md
+
+🔍 Code Quality Results:
+- mypy: ✅ 0 errors
+- ruff: ✅ 0 issues
+
+**Next Steps:**
+1. Set environment variable: export NYISO_API_KEY=your_key
+2. Set up Redis: export REDIS_HOST=localhost REDIS_PORT=6379
+3. Run tests: pytest sourcing/scraping/nyiso/tests/ -v
+4. Test scraper: python sourcing/scraping/nyiso/scraper_nyiso_load_http.py --start-date 2025-01-20 --end-date 2025-01-21
+```
 
 ## Error Handling
 

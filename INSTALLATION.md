@@ -31,8 +31,11 @@ Infrastructure files are bundled in the plugin and auto-installed on first use!
 ### 2. Configure Environment
 
 ```bash
-# Install Python dependencies
+# Install Python dependencies (required)
 pip install redis boto3 click requests beautifulsoup4 playwright confluent-kafka pydantic
+
+# Install code quality tools (optional but recommended)
+pip install mypy ruff
 
 # Set environment variables
 export REDIS_HOST=localhost

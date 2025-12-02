@@ -115,20 +115,54 @@ After user approval:
    # LAST_UPDATED: {current_date}
    ```
 
-5. Report what was changed:
-   ```
-   ✅ Scraper fixed successfully!
+### Step 6: Run Code Quality Checks
 
-   **Changes Made:**
-   - Updated API endpoint from X to Y
-   - Fixed response parsing logic
-   - Updated tests to match new format
+After applying fixes, run quality checks to ensure no new issues were introduced:
 
-   **Next Steps:**
-   1. Run tests: `pytest sourcing/scraping/{source}/tests/ -v`
-   2. Test scraper manually with recent date
-   3. Monitor for any new issues
-   ```
+Use Task tool with subagent_type='code-quality-checker':
+```python
+Task(
+    subagent_type='code-quality-checker',
+    description='Check quality after fix',
+    prompt=f"""
+    Run mypy and ruff checks on the fixed scraper:
+
+    File: {scraper_file_path}
+
+    Process:
+    1. Check if mypy and ruff are installed
+    2. Run mypy type checking
+    3. Run ruff style checking
+    4. Report results
+    5. Offer to auto-fix any issues found
+    6. Re-run checks after fixes
+
+    Only complete when checks pass or user approves remaining issues.
+    """
+)
+```
+
+### Step 7: Report Final Status
+
+After quality checker completes, report what was changed:
+
+```
+✅ Scraper fixed successfully!
+
+**Changes Made:**
+- Updated API endpoint from X to Y
+- Fixed response parsing logic
+- Updated tests to match new format
+
+🔍 Code Quality Results:
+- mypy: ✅ 0 errors
+- ruff: ✅ 0 issues
+
+**Next Steps:**
+1. Run tests: `pytest sourcing/scraping/{source}/tests/ -v`
+2. Test scraper manually with recent date
+3. Monitor for any new issues
+```
 
 ## Example Workflow
 

@@ -1,7 +1,7 @@
 {
   "name": "scraper-dev",
-  "version": "1.3.0",
-  "description": "Automated scraper generation for data collection pipelines with version tracking and maintenance tools",
+  "version": "1.4.0",
+  "description": "Automated scraper generation for data collection pipelines with type-safe code, quality checks, and maintenance tools",
   "author": "Claude Scraper Agent",
   "agents": [
     {
@@ -45,6 +45,12 @@
       "description": "Updates scrapers to new infrastructure versions - syncs with framework changes while preserving custom logic",
       "file": "agents/scraper-updater.md",
       "color": "blue"
+    },
+    {
+      "name": "code-quality-checker",
+      "description": "Runs mypy and ruff checks on generated scrapers and proposes fixes for type errors and style issues",
+      "file": "agents/code-quality-checker.md",
+      "color": "green"
     }
   ],
   "commands": [

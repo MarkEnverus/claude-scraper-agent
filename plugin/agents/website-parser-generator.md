@@ -50,22 +50,23 @@ Update Frequency: {FREQUENCY}
 
 import requests
 from bs4 import BeautifulSoup
-from typing import List
+from datetime import datetime
+from typing import List, Dict, Any
 from urllib.parse import urljoin
 
 class {Source}{Type}Collector(BaseCollector):
     """Collector for {SOURCE} {DATA_TYPE} data via website parsing."""
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any) -> None:
         super().__init__(dgroup="{source}_{type}", **kwargs)
-        self.base_url = "{BASE_URL}"
+        self.base_url: str = "{BASE_URL}"
 
-    def _extract_download_links(self, html_content: str) -> List[dict]:
+    def _extract_download_links(self, html_content: str) -> List[Dict[str, str]]:
         """Parse HTML and extract download links."""
         soup = BeautifulSoup(html_content, 'html.parser')
 
         # CUSTOMIZE BASED ON CSS SELECTOR OR PATTERN
-        links = []
+        links: List[Dict[str, str]] = []
         for link in soup.select("{CSS_SELECTOR}"):
             href = link.get('href')
             if href and "{FILE_PATTERN}" in href:
@@ -79,7 +80,7 @@ class {Source}{Type}Collector(BaseCollector):
 
         return links
 
-    def generate_candidates(self, start_date, end_date) -> List[DownloadCandidate]:
+    def generate_candidates(self, start_date: datetime, end_date: datetime) -> List[DownloadCandidate]:
         """Fetch page and extract download links."""
 
         # Get HTML page
