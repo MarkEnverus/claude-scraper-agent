@@ -1,7 +1,7 @@
 {
   "name": "scraper-dev",
-  "version": "1.2.0",
-  "description": "Automated scraper generation for data collection pipelines",
+  "version": "1.3.0",
+  "description": "Automated scraper generation for data collection pipelines with version tracking and maintenance tools",
   "author": "Claude Scraper Agent",
   "agents": [
     {
@@ -33,6 +33,18 @@
       "description": "Generates email attachment download scrapers with IMAP/POP3 support",
       "file": "agents/email-collector-generator.md",
       "color": "cyan"
+    },
+    {
+      "name": "scraper-fixer",
+      "description": "Diagnoses and fixes issues in existing scrapers - handles API changes, format changes, and any code issues",
+      "file": "agents/scraper-fixer.md",
+      "color": "yellow"
+    },
+    {
+      "name": "scraper-updater",
+      "description": "Updates scrapers to new infrastructure versions - syncs with framework changes while preserving custom logic",
+      "file": "agents/scraper-updater.md",
+      "color": "blue"
     }
   ],
   "commands": [
@@ -40,6 +52,16 @@
       "name": "create-scraper",
       "description": "Interactive scraper generation workflow",
       "file": "commands/create-scraper.md"
+    },
+    {
+      "name": "fix-scraper",
+      "description": "Debug and fix issues in existing scrapers",
+      "file": "commands/fix-scraper.md"
+    },
+    {
+      "name": "update-scraper",
+      "description": "Update existing scrapers to new infrastructure versions (use --mode=scan or --mode=auto)",
+      "file": "commands/update-scraper.md"
     }
   ],
   "skills": [
