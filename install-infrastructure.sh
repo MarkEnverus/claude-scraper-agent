@@ -25,6 +25,7 @@ if [ -z "$1" ]; then
     echo "  - hash_registry.py → sourcing/scraping/commons/"
     echo "  - logging_json.py → sourcing/common/"
     echo "  - collection_framework.py → sourcing/scraping/commons/"
+    echo "  - kafka_utils.py → sourcing/scraping/commons/"
     exit 1
 fi
 
@@ -71,6 +72,10 @@ echo "  → collection_framework.py..."
 curl -fsSL "$BASE_URL/infrastructure/collection_framework.py" \
     -o "$SOURCING_PATH/sourcing/scraping/commons/collection_framework.py"
 
+echo "  → kafka_utils.py..."
+curl -fsSL "$BASE_URL/infrastructure/kafka_utils.py" \
+    -o "$SOURCING_PATH/sourcing/scraping/commons/kafka_utils.py"
+
 echo ""
 echo "Verifying installation..."
 echo "------------------------"
@@ -94,6 +99,12 @@ else
     echo "❌ collection_framework.py missing"
 fi
 
+if [ -f "$SOURCING_PATH/sourcing/scraping/commons/kafka_utils.py" ]; then
+    echo "✅ kafka_utils.py"
+else
+    echo "❌ kafka_utils.py missing"
+fi
+
 echo ""
 echo "========================================"
 echo "Infrastructure Installation Complete!"
@@ -102,7 +113,7 @@ echo ""
 echo "Next Steps:"
 echo ""
 echo "1. Install Python dependencies:"
-echo "   pip install redis boto3 click requests beautifulsoup4 playwright"
+echo "   pip install redis boto3 click requests beautifulsoup4 playwright confluent-kafka pydantic"
 echo ""
 echo "2. Configure environment variables:"
 echo "   export REDIS_HOST=localhost"

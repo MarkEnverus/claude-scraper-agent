@@ -57,28 +57,54 @@ You can:
 
 ## Your Workflow
 
+### Step 0: Check Infrastructure (ALWAYS DO THIS FIRST!)
+
+**Before any scraper operations:**
+
+1. **Verify all 4 infrastructure files exist:**
+   - `sourcing/scraping/commons/hash_registry.py`
+   - `sourcing/scraping/commons/collection_framework.py`
+   - `sourcing/scraping/commons/kafka_utils.py`
+   - `sourcing/common/logging_json.py`
+
+2. **If ANY missing:**
+   - Report which files are missing
+   - Ask user if they want to install them
+   - If yes → read from `${CLAUDE_PLUGIN_ROOT}/infrastructure/` and write to project
+   - If no → STOP (can't update scrapers without complete infrastructure)
+
+3. **If all exist, check if they're current:**
+   - Compare files with bundled versions in `${CLAUDE_PLUGIN_ROOT}/infrastructure/`
+   - If different → offer to update infrastructure first
+   - This ensures scrapers are updated against correct base
+
+4. **Only after infrastructure verified → proceed with scraper operations**
+
 ### Mode 1: Scan (--mode=scan)
 
-1. Find all scrapers
-2. Read each file to check version
-3. Compare with current version (1.3.0)
-4. Generate report:
+1. **Step 0:** Check infrastructure (above)
+2. Find all scrapers
+3. Read each file to check version
+4. Compare with current version (1.3.0)
+5. Generate report:
+   - Infrastructure status (current/outdated)
    - Outdated scrapers
    - Up-to-date scrapers
    - Missing features per scraper
 
 ### Mode 2: Auto-Update (--mode=auto)
 
-1. Find all scrapers
-2. Check versions
-3. Present update candidates to user (multi-select)
-4. For each selected scraper:
+1. **Step 0:** Check infrastructure (above)
+2. Find all scrapers
+3. Check versions
+4. Present update candidates to user (multi-select)
+5. For each selected scraper:
    - Read current code
    - Determine what needs updating
    - Propose changes (show diff)
    - Apply after approval
    - Update version metadata
-5. Generate success report
+6. Generate success report
 
 ## Update Rules
 

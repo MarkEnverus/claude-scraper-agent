@@ -43,9 +43,45 @@ Scans scrapers, proposes updates, and applies them with user approval.
 
 ## Your Process
 
+### Step 0: Check Infrastructure Files (FIRST!)
+
+**Before checking scrapers, verify infrastructure is up-to-date:**
+
+Ask user for their sourcing project path, then:
+
+1. **Check if all 4 infrastructure files exist:**
+   ```bash
+   ls sourcing/scraping/commons/hash_registry.py 2>/dev/null && echo "✅ hash_registry.py" || echo "❌ hash_registry.py MISSING"
+   ls sourcing/scraping/commons/collection_framework.py 2>/dev/null && echo "✅ collection_framework.py" || echo "❌ collection_framework.py MISSING"
+   ls sourcing/scraping/commons/kafka_utils.py 2>/dev/null && echo "✅ kafka_utils.py" || echo "❌ kafka_utils.py MISSING"
+   ls sourcing/common/logging_json.py 2>/dev/null && echo "✅ logging_json.py" || echo "❌ logging_json.py MISSING"
+   ```
+
+2. **If ANY files missing:**
+   - Report: "⚠️ Infrastructure incomplete! Missing files: [list]"
+   - Ask: "Install missing infrastructure files before updating scrapers?"
+   - If yes:
+     - Use Read tool to read from `${CLAUDE_PLUGIN_ROOT}/infrastructure/[filename]`
+     - Use Write tool to create missing files
+     - Report: "✅ Infrastructure installed"
+   - If no → STOP (can't update scrapers without complete infrastructure)
+
+3. **If all files exist, check for updates:**
+   - Read each infrastructure file from `${CLAUDE_PLUGIN_ROOT}/infrastructure/`
+   - Compare with files in user's project
+   - If different:
+     - Report: "⚠️ Infrastructure outdated! Updated files available: [list]"
+     - Ask: "Update infrastructure to latest version?"
+     - If yes → overwrite with latest from plugin
+     - If no → Note in report that infrastructure may be outdated
+
+4. **Only after infrastructure is verified/updated → proceed to Step 1 (scraper scanning)**
+
+**Why this matters:** Scrapers depend on infrastructure. If infrastructure is missing or outdated, scraper updates may fail or introduce bugs.
+
 ### Step 1: Scan All Scrapers
 
-Ask user for their sourcing project path, then run:
+After infrastructure check, run:
 
 ```bash
 find sourcing/scraping -name "scraper_*.py" -type f 2>/dev/null
