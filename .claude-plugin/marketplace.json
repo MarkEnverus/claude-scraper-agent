@@ -10,8 +10,8 @@
   "plugins": [
     {
       "name": "scraper-dev",
-      "description": "Automated scraper generation for data collection pipelines with support for HTTP/REST APIs, website parsing, FTP/SFTP, and email attachments. Includes self-contained Kafka notification support.",
-      "version": "1.1.0",
+      "description": "Automated scraper generation for data collection pipelines with support for HTTP/REST APIs, website parsing, FTP/SFTP, and email attachments. Includes self-contained Kafka notification support and optional config file pre-configuration.",
+      "version": "1.2.0",
       "author": {
         "name": "Mark Johnson",
         "email": "mark.johnson@example.com"

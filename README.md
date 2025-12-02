@@ -147,6 +147,32 @@ s3://bucket/sourcing/nyiso_load_forecast/year=2025/month=01/day=20/load_forecast
 
 ## Configuration
 
+### Optional: Scraper Configuration Files
+
+You can pre-configure scrapers using `.scraper-dev.md` files in your mono-repo:
+
+**Location:**
+```
+sourcing/scraping/{dataSource}/{dataSet}/.scraper-dev.md
+```
+
+**Example:**
+```yaml
+---
+data_source: NYISO
+data_type: load_forecast
+collection_method: HTTP/REST API
+api_base_url: https://api.nyiso.com/v1
+api_endpoint: /load/hourly
+---
+```
+
+**Benefits:**
+- Agent automatically finds and uses config values
+- Only prompts for missing information
+- Supports multiple projects in mono-repo
+- See `.scraper-dev.example.md` for full example
+
 ### Environment Variables
 
 ```bash

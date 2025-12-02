@@ -47,7 +47,21 @@ export SASL_USERNAME=your_username
 export SASL_PASSWORD=your_password
 ```
 
-### 3. Restart and Test
+### 3. (Optional) Create Config Files
+
+Speed up scraper generation by pre-configuring your datasets:
+
+```bash
+# Copy example config
+cp .scraper-dev.example.md sourcing/scraping/nyiso/load_forecast/.scraper-dev.md
+
+# Edit with your values
+nano sourcing/scraping/nyiso/load_forecast/.scraper-dev.md
+```
+
+The agent will automatically find and use config values, only asking for what's missing.
+
+### 4. Restart and Test
 
 ```bash
 # Restart Claude Code
@@ -58,7 +72,8 @@ export SASL_PASSWORD=your_password
 The agent will:
 1. Check if infrastructure files exist in your project
 2. Auto-install them if missing
-3. Start the interactive scraper generation wizard
+3. Scan for `.scraper-dev.md` config files (optional)
+4. Start the interactive scraper generation wizard
 
 ---
 
