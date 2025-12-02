@@ -12,19 +12,20 @@ Automate the generation of production-ready data collection scrapers for data pi
 
 ## ✅ What Was Delivered
 
-### 1. Infrastructure Code (3 files)
+### 1. Infrastructure Code (4 files)
 **Location:** `infrastructure/`
 
 | File | Purpose | Lines |
 |------|---------|-------|
 | `hash_registry.py` | Redis-based content hash deduplication | 240 |
 | `logging_json.py` | JSON structured logging for Grafana | 150 |
+| `kafka_utils.py` | Kafka notifications and message publishing | 380 |
 | `collection_framework.py` | Base collector class with S3/Redis/Kafka | 450 |
 
 **Key Features:**
 - Redis hash registry with environment namespacing (`hash:{env}:{dgroup}:{hash}`)
 - S3 date partitioning (`year=YYYY/month=MM/day=DD`)
-- Kafka notification publishing (existing pattern)
+- Kafka notification publishing (fully self-contained, no external dependencies)
 - JSON structured logging
 - Comprehensive error handling
 - Extensive documentation
@@ -35,7 +36,7 @@ Automate the generation of production-ready data collection scrapers for data pi
 | Component | Files | Purpose |
 |-----------|-------|---------|
 | Manifest | `plugin.json` | Plugin configuration |
-| Agents | 3 `.md` files | Scraper generation logic |
+| Agents | 5 `.md` files | Scraper generation logic |
 | Commands | `create-scraper.md` | Entry point slash command |
 | Skills | `scraper-creation.md` | Reusable templates |
 
@@ -54,6 +55,14 @@ Automate the generation of production-ready data collection scrapers for data pi
    - Generates HTML parsing scrapers
    - BeautifulSoup integration
    - Link extraction logic
+
+4. **ftp-collector-generator** (FTP/SFTP Specialist)
+   - Generates FTP/SFTP file download scrapers
+   - Directory listing and file pattern matching
+
+5. **email-collector-generator** (Email Specialist)
+   - Generates email attachment download scrapers
+   - IMAP mailbox scanning and filtering
 
 ### 3. Tests
 **Location:** `tests/`
@@ -85,11 +94,11 @@ Automate the generation of production-ready data collection scrapers for data pi
 
 | Metric | Count |
 |--------|-------|
-| Total Files Created | 17 |
-| Lines of Code | ~3,500 |
-| Infrastructure Classes | 3 |
-| Agent Prompts | 3 |
-| Test Cases | 15+ |
+| Total Files Created | 19 |
+| Lines of Code | ~4,200 |
+| Infrastructure Classes | 4 |
+| Agent Prompts | 5 |
+| Test Cases | 25+ |
 | Documentation Pages | 5 |
 
 ---

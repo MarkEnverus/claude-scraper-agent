@@ -32,6 +32,7 @@ Before interviewing the user, check if infrastructure files exist:
 2. Check if these files exist:
    - `sourcing/scraping/commons/hash_registry.py`
    - `sourcing/scraping/commons/collection_framework.py`
+   - `sourcing/scraping/commons/kafka_utils.py`
    - `sourcing/common/logging_json.py`
 
 3. If ANY files are missing:
@@ -39,6 +40,7 @@ Before interviewing the user, check if infrastructure files exist:
    - Use Read tool to read from `${CLAUDE_PLUGIN_ROOT}/infrastructure/`:
      - `${CLAUDE_PLUGIN_ROOT}/infrastructure/hash_registry.py`
      - `${CLAUDE_PLUGIN_ROOT}/infrastructure/collection_framework.py`
+     - `${CLAUDE_PLUGIN_ROOT}/infrastructure/kafka_utils.py`
      - `${CLAUDE_PLUGIN_ROOT}/infrastructure/logging_json.py`
    - Use Write tool to create missing files in user's project
    - Report success: "✅ Infrastructure installed successfully"

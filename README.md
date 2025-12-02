@@ -5,7 +5,7 @@ Automated scraper generation system for data collection pipelines using Claude C
 ## Overview
 
 This project contains:
-- **Infrastructure Code**: Base classes for Redis hash registry, JSON logging, and collection framework
+- **Infrastructure Code**: Base classes for Redis hash registry, JSON logging, Kafka notifications, and collection framework
 - **Claude Code Plugin**: Agents that generate production-ready scrapers
 - **Tests**: Unit tests for infrastructure components
 - **Examples**: Sample generated scrapers
@@ -18,6 +18,7 @@ claude_scraper_agent/
 ├── infrastructure/          # Base classes to be copied to sourcing project
 │   ├── hash_registry.py
 │   ├── logging_json.py
+│   ├── kafka_utils.py
 │   └── collection_framework.py
 ├── plugin/                  # Claude Code plugin
 │   ├── plugin.json
@@ -159,7 +160,10 @@ export S3_BUCKET=your-s3-bucket-name
 export AWS_PROFILE=default  # or use IAM role
 
 # Kafka (optional)
-export KAFKA_CONNECTION_STRING="kafka://host:port/topic?..."
+export KAFKA_CONNECTION_STRING="kafka://host:port/topic?security_protocol=SASL_PLAINTEXT&X_sasl_file=/path/to/creds"
+# Or use environment variables for SASL
+export SASL_USERNAME=your_username
+export SASL_PASSWORD=your_password
 
 # Source-specific API keys
 export NYISO_API_KEY=your_key_here
@@ -172,7 +176,7 @@ export IBM_API_KEY=your_key_here
 
 ```bash
 # Install dependencies
-pip install pytest pytest-cov redis fakeredis boto3
+pip install pytest pytest-cov redis fakeredis boto3 confluent-kafka pydantic
 
 # Run all tests
 pytest tests/ -v --cov=infrastructure
@@ -202,10 +206,12 @@ class MyCollector(BaseCollector):
 ### v1.0 (Current)
 - ✅ HTTP/REST API scrapers
 - ✅ Website parsing scrapers
+- ✅ FTP/SFTP file download scrapers
+- ✅ Email attachment download scrapers
 - ✅ Redis hash deduplication
 - ✅ S3 date partitioning
 - ✅ JSON structured logging
-- ✅ Kafka notifications
+- ✅ Kafka notifications (fully self-contained)
 - ✅ 80%+ test coverage
 - ✅ Auto-generated documentation
 

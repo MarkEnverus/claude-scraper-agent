@@ -294,9 +294,9 @@ class BaseCollector(ABC):
 
         try:
             # Import here to avoid circular dependency
-            from sourcing.common.kafka.kafka_configuration import KafkaConfiguration
-            from sourcing.common.kafka.kafka_producer import KafkaProducer
-            from sourcing.common.models.scraper_notification_message import (
+            from sourcing.scraping.commons.kafka_utils import (
+                KafkaConfiguration,
+                KafkaProducer,
                 ScraperNotificationMessage
             )
 

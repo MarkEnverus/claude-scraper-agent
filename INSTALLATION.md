@@ -32,12 +32,19 @@ Infrastructure files are bundled in the plugin and auto-installed on first use!
 
 ```bash
 # Install Python dependencies
-pip install redis boto3 click requests beautifulsoup4 playwright
+pip install redis boto3 click requests beautifulsoup4 playwright confluent-kafka pydantic
 
 # Set environment variables
 export REDIS_HOST=localhost
 export REDIS_PORT=6379
 export S3_BUCKET=your-bucket-name
+
+# Optional: Kafka configuration
+export KAFKA_CONNECTION_STRING="kafka://localhost:9092/my-topic"
+# Or with SASL authentication
+export KAFKA_CONNECTION_STRING="kafka://localhost:9092/my-topic?security_protocol=SASL_PLAINTEXT"
+export SASL_USERNAME=your_username
+export SASL_PASSWORD=your_password
 ```
 
 ### 3. Restart and Test
@@ -78,6 +85,7 @@ cd /path/to/your-sourcing-project
 # Check files exist
 ls -l sourcing/scraping/commons/hash_registry.py
 ls -l sourcing/scraping/commons/collection_framework.py
+ls -l sourcing/scraping/commons/kafka_utils.py
 ls -l sourcing/common/logging_json.py
 ```
 
