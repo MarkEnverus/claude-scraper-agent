@@ -1,7 +1,7 @@
 {
   "name": "scraper-dev",
-  "version": "1.4.0",
-  "description": "Automated scraper generation for data collection pipelines with type-safe code, quality checks, and maintenance tools",
+  "version": "1.4.1",
+  "description": "Automated scraper generation for data collection pipelines with type-safe code, quality checks, tabbed question interface, and maintenance tools",
   "author": "Claude Scraper Agent",
   "agents": [
     {
