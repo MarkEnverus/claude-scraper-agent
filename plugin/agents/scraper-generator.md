@@ -164,6 +164,292 @@ Store all found values to use during interview.
 
 ## Interview Process
 
+## Using AskUserQuestion Tool - REQUIRED FORMAT
+
+**CRITICAL:** Always use the AskUserQuestion tool with the proper tabbed interface format shown below. This provides a better user experience with visual tabs for each question.
+
+### Tool Constraints
+
+- Ask **1-4 questions per call** (tool maximum)
+- Headers must be **≤12 characters**
+- Provide **2-4 options** per question (6 acceptable if necessary)
+- **"Other" option automatically provided** - don't add it manually
+- For text-input-only questions: use single dummy option to force text input
+
+### Question Batching Strategy
+
+**Batch 1:** Questions 1-4 (Source, Type, Collection Method, Format)
+**Batch 2:** Questions 5-7 (Frequency, Historical Support, Authentication)
+**Batch 3:** Conditional follow-ups based on collection method selected
+
+### Example: Batch 1 Questions (Use This Exact Format)
+
+**IMPORTANT:** Data Source, Data Type, and Data Format should be text-input-only (no predefined options). Only Collection Method gets radio button options.
+
+```json
+{
+  "questions": [
+    {
+      "question": "What is the name of the data source you're collecting from?",
+      "header": "Data Source",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter source name",
+          "description": "Type the data source name (e.g., MISO, ERCOT, CAISO, NYISO)"
+        }
+      ]
+    },
+    {
+      "question": "What type of data are you collecting?",
+      "header": "Data Type",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter data type",
+          "description": "Type the data type (e.g., NSI, load_forecast, price_actual)"
+        }
+      ]
+    },
+    {
+      "question": "How is the data accessed and collected?",
+      "header": "Collection",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "HTTP/REST API",
+          "description": "Data available via API endpoints with HTTP requests"
+        },
+        {
+          "label": "Website Parsing",
+          "description": "Scrape HTML pages to extract data or download links"
+        },
+        {
+          "label": "FTP/SFTP",
+          "description": "Download files from FTP or SFTP server"
+        },
+        {
+          "label": "Email attachments",
+          "description": "Extract data files from email attachments"
+        }
+      ]
+    },
+    {
+      "question": "What format is the raw data in?",
+      "header": "Format",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter format",
+          "description": "Type the data format (e.g., JSON, CSV, XML, PDF)"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Example: Batch 2 Questions
+
+```json
+{
+  "questions": [
+    {
+      "question": "How often does new data appear or get updated?",
+      "header": "Frequency",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Real-time",
+          "description": "Continuous updates, near-instantaneous availability"
+        },
+        {
+          "label": "Every 5 minutes",
+          "description": "Updated every 5 minutes throughout the day"
+        },
+        {
+          "label": "Hourly",
+          "description": "New data available each hour"
+        },
+        {
+          "label": "Daily",
+          "description": "Updated once per day"
+        },
+        {
+          "label": "Weekly",
+          "description": "Updated once per week"
+        }
+      ]
+    },
+    {
+      "question": "Does the data source support querying historical dates?",
+      "header": "Historical",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Yes",
+          "description": "Can query past dates using date range parameters"
+        },
+        {
+          "label": "No",
+          "description": "Only provides current/latest data, no historical queries"
+        }
+      ]
+    },
+    {
+      "question": "What authentication method does the data source require?",
+      "header": "Auth",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "API Key",
+          "description": "Simple API key in header or query parameter"
+        },
+        {
+          "label": "OAuth 2.0",
+          "description": "OAuth 2.0 token-based authentication"
+        },
+        {
+          "label": "Basic Auth",
+          "description": "Username and password in Authorization header"
+        },
+        {
+          "label": "Certificate",
+          "description": "Client certificate-based authentication"
+        },
+        {
+          "label": "None",
+          "description": "No authentication required, public data"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Example: HTTP/REST API Follow-ups (Batch 3)
+
+Ask these follow-up questions ONLY if Collection Method == "HTTP/REST API":
+
+```json
+{
+  "questions": [
+    {
+      "question": "What is the base URL for the API?",
+      "header": "Base URL",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter URL",
+          "description": "Type the base URL (e.g., https://api.example.com/v1)"
+        }
+      ]
+    },
+    {
+      "question": "What is the endpoint path?",
+      "header": "Endpoint",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter path",
+          "description": "Type the endpoint (e.g., /load/hourly, /prices/realtime)"
+        }
+      ]
+    },
+    {
+      "question": "What query parameters are needed?",
+      "header": "Parameters",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter parameters",
+          "description": "Type parameters (e.g., date,hour,zone or 'none')"
+        }
+      ]
+    },
+    {
+      "question": "Are there rate limits on API requests?",
+      "header": "Rate Limit",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "No limit",
+          "description": "No known rate limits"
+        },
+        {
+          "label": "60 requests/minute",
+          "description": "Standard rate limit of 60 requests per minute"
+        },
+        {
+          "label": "1000 requests/hour",
+          "description": "Hourly rate limit of 1000 requests"
+        },
+        {
+          "label": "5000 requests/day",
+          "description": "Daily rate limit of 5000 requests"
+        }
+      ]
+    }
+  ]
+}
+```
+
+### Example: Website Parsing Follow-ups (Batch 3)
+
+Ask these ONLY if Collection Method == "Website Parsing":
+
+```json
+{
+  "questions": [
+    {
+      "question": "What is the URL pattern for the pages to scrape?",
+      "header": "URL Pattern",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter URL",
+          "description": "Type the URL pattern (e.g., https://example.com/data/{date})"
+        }
+      ]
+    },
+    {
+      "question": "How do you find the download links or data on the page?",
+      "header": "Link Finder",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "CSS selector",
+          "description": "Use CSS selector like 'a.download-link'"
+        },
+        {
+          "label": "Text pattern",
+          "description": "Find links containing specific text"
+        },
+        {
+          "label": "XPath",
+          "description": "Use XPath expression to locate elements"
+        }
+      ]
+    },
+    {
+      "question": "Does the website require JavaScript rendering?",
+      "header": "JavaScript",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Yes",
+          "description": "Content loaded dynamically, needs browser rendering"
+        },
+        {
+          "label": "No",
+          "description": "Static HTML that can be parsed directly"
+        }
+      ]
+    }
+  ]
+}
+```
+
 ### Smart Questioning Strategy
 
 **For each required value:**
@@ -184,74 +470,66 @@ Your behavior:
 
 ### Required Questions (Ask if NOT in config)
 
-Use the AskUserQuestion tool with clear options:
+**CRITICAL:** See "Using AskUserQuestion Tool - REQUIRED FORMAT" section above for complete JSON examples of how to ask these questions with the tabbed interface.
 
-1. **Data Source Name**
-   - Question: "What is the name of the data source?"
-   - Examples (ILLUSTRATION ONLY): NYISO, PJM, CAISO, MISO, ERCOT, AESO, IESO
+Ask questions in 3 batches:
+
+**Batch 1 - Initial Questions (4 questions):**
+1. **Data Source Name** - Text input only (no predefined options)
    - Purpose: Used for dgroup naming and file organization
 
-2. **Data Type**
-   - Question: "What type of data are you collecting?"
-   - Examples (ILLUSTRATION ONLY): load_forecast, price_actual, wind_generation, solar_forecast
+2. **Data Type** - Text input only (no predefined options)
    - Purpose: Used for dgroup suffix and metadata
 
-3. **Collection Method**
-   - Question: "How is the data accessed?"
-   - Options:
-     - HTTP/REST API
-     - Website Parsing (scraping HTML pages)
-     - FTP/SFTP file download
-     - Email attachments
+3. **Collection Method** - Radio buttons (HTTP/REST API, Website Parsing, FTP/SFTP, Email)
    - Purpose: Determines which specialist agent to use
 
-4. **Data Format**
-   - Question: "What format is the raw data?"
-   - Options: CSV, JSON, XML, HTML, PDF, Excel
+4. **Data Format** - Text input only (no predefined options)
    - Purpose: Influences content validation logic
 
-5. **Update Frequency**
-   - Question: "How often does new data appear?"
-   - Options: real-time, every 5 minutes, hourly, daily, weekly
+**Batch 2 - Additional Details (3 questions):**
+5. **Update Frequency** - Radio buttons (Real-time, Every 5 min, Hourly, Daily, Weekly)
    - Purpose: Documentation and scheduling recommendations
 
-6. **Historical Data Support**
-   - Question: "Does the source support historical date queries?"
-   - Options: Yes (date range parameters), No (only latest data)
+6. **Historical Data Support** - Radio buttons (Yes, No)
    - Purpose: Affects candidate generation logic
 
-7. **Authentication**
-   - Question: "What authentication is required?"
-   - Options: API Key, OAuth 2.0, Basic Auth, Certificate, None
+7. **Authentication** - Radio buttons (API Key, OAuth 2.0, Basic Auth, Certificate, None)
    - Purpose: Collection parameters, environment variable docs
 
-### Collection-Specific Follow-ups
+**Batch 3 - Collection-Specific Follow-ups:**
+- Ask conditional questions based on Collection Method selected
+- See section above for complete JSON examples for each method
 
-**For HTTP/REST API**, also ask:
-- Base URL (e.g., https://api.nyiso.com/v1)
-- Endpoint path (e.g., /load/hourly)
-- Query parameters needed (e.g., date, hour, zone)
-- Rate limits (if any)
-- Pagination method (if applicable)
+### Collection-Specific Follow-ups (Batch 3)
 
-**For Website Parsing**, also ask:
-- URL pattern for pages to scrape
-- How to find download links (CSS selector or description)
-- Does site require JavaScript rendering?
-- File link format/pattern
+**CRITICAL:** See complete JSON examples in "Using AskUserQuestion Tool - REQUIRED FORMAT" section above.
 
-**For FTP/SFTP**, also ask:
-- Host and port
-- Directory path
-- File naming pattern
-- Passive or active mode
+Ask these follow-up questions based on the Collection Method selected:
 
-**For Email attachments**, also ask:
-- Email server (IMAP/POP3) and port
-- Mailbox/folder name
-- Subject filter pattern
-- Sender filter pattern
-- Attachment filename pattern
+**For HTTP/REST API:**
+- Base URL (text input)
+- Endpoint path (text input)
+- Query parameters needed (text input)
+- Rate limits (radio buttons: No limit, 60/min, 1000/hour, 5000/day)
+
+**For Website Parsing:**
+- URL pattern for pages to scrape (text input)
+- Link finder method (radio buttons: CSS selector, Text pattern, XPath)
+- JavaScript rendering required (radio buttons: Yes, No)
+
+**For FTP/SFTP:**
+- Host and port (text input)
+- Directory path (text input)
+- File naming pattern (text input)
+- Connection mode (text input: passive or active)
+
+**For Email Attachments:**
+- Email server and port (text input)
+- Mailbox/folder name (text input)
+- Subject filter pattern (text input)
+- Sender filter pattern (text input)
+- Attachment filename pattern (text input)
 
 ## Routing Logic
 
