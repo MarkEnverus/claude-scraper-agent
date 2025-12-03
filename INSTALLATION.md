@@ -28,14 +28,22 @@ claude plugin install scraper-dev@scraper-agent-marketplace
 
 Infrastructure files are bundled in the plugin and auto-installed on first use!
 
-### 2. Configure Environment
+### 2. Install uv (if not already installed)
+
+```bash
+curl -LsSf https://astral.sh/uv/install.sh | sh
+```
+
+For other installation methods, see https://docs.astral.sh/uv/
+
+### 3. Configure Environment
 
 ```bash
 # Install Python dependencies (required)
-pip install redis boto3 click requests beautifulsoup4 playwright confluent-kafka pydantic
+uv pip install redis boto3 click requests beautifulsoup4 playwright confluent-kafka pydantic
 
 # Install code quality tools (optional but recommended)
-pip install mypy ruff
+uv pip install mypy ruff
 
 # Set environment variables
 export REDIS_HOST=localhost
@@ -50,7 +58,7 @@ export SASL_USERNAME=your_username
 export SASL_PASSWORD=your_password
 ```
 
-### 3. (Optional) Create Config Files
+### 4. (Optional) Create Config Files
 
 Speed up scraper generation by pre-configuring your datasets:
 
@@ -64,7 +72,7 @@ nano sourcing/scraping/nyiso/load_forecast/.scraper-dev.md
 
 The agent will automatically find and use config values, only asking for what's missing.
 
-### 4. Restart and Test
+### 5. Restart and Test
 
 ```bash
 # Restart Claude Code

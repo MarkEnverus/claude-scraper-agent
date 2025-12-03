@@ -464,7 +464,7 @@ S3_BUCKET=your-bucket-name
 ```bash
 # FTP (built-in)
 # SFTP requires:
-pip install paramiko
+uv pip install paramiko
 ```
 
 ## Notes

@@ -36,7 +36,7 @@ which mypy && which ruff
 - Report which tools are missing
 - Provide installation instructions:
   ```bash
-  pip install mypy ruff
+  uv pip install mypy ruff
   ```
 - Stop (cannot proceed without tools)
 

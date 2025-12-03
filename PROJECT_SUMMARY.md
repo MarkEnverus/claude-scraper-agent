@@ -198,7 +198,7 @@ export IBM_API_KEY=your_key_here
 ### Dependencies
 
 ```bash
-pip install redis boto3 click requests beautifulsoup4 lxml
+uv pip install redis boto3 click requests beautifulsoup4 lxml
 ```
 
 ---

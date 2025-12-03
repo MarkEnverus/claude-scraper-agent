@@ -461,7 +461,7 @@ S3_BUCKET=your-bucket-name
 
 ```bash
 # Email (built-in imaplib)
-pip install redis boto3 click
+uv pip install redis boto3 click
 ```
 
 ## Notes

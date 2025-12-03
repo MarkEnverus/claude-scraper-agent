@@ -66,7 +66,7 @@ The script also installs the Claude Code plugin:
 ### 3. Install Python Dependencies
 
 ```bash
-pip install redis boto3 click requests beautifulsoup4 lxml
+uv pip install redis boto3 click requests beautifulsoup4 lxml
 ```
 
 ### 4. Configure Environment
@@ -292,7 +292,7 @@ python -c "from sourcing.scraping.{source}.scraper_{source}_{type}_http import *
 cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 
 # Install test dependencies
-pip install pytest pytest-cov
+uv pip install pytest pytest-cov
 
 # Run all tests
 pytest tests/ -v --cov=infrastructure

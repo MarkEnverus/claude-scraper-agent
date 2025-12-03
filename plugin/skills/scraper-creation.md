@@ -131,7 +131,7 @@ Auto-generated scraper for {SOURCE} {DATA_TYPE} data.
 ## Installation
 
 ```bash
-pip install redis boto3 click requests
+uv pip install redis boto3 click requests
 ```
 
 ## Configuration

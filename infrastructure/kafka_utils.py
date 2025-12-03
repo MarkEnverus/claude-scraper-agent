@@ -226,7 +226,7 @@ class KafkaProducer:
         except ImportError:
             raise ImportError(
                 "confluent-kafka is required for Kafka support. "
-                "Install it with: pip install confluent-kafka"
+                "Install it with: uv pip install confluent-kafka"
             )
 
         try:
