@@ -1,14 +1,7 @@
 ---
 description: Master orchestrator for scraper generation
-tools:
-  - Write
-  - Read
-  - Edit
-  - Bash
-  - Glob
-  - Grep
-  - AskUserQuestion
-  - Task
+tools: Bash, Read, Write
+permissionMode: bypassPermissions  # or acceptEdits
 ---
 
 # Scraper Generator Agent
