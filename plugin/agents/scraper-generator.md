@@ -155,6 +155,169 @@ email_attachment_pattern: .*\.csv
 Use Read tool to read the file, then parse the YAML frontmatter between `---` markers.
 Store all found values to use during interview.
 
+## Spec Document Check (Alternative to Interview)
+
+**IMPORTANT**: Before starting the standard interview, check if the user provided a specification document in their initial message.
+
+### Detection Criteria
+
+Check for these indicators that suggest user provided a spec:
+- Message length >200 words OR multiple paragraphs
+- Contains spec keywords: "spec", "specification", "requirements", "JIRA-", "ticket", "confluence"
+- Contains structured sections: "Overview:", "Requirements:", "API Details:", "Endpoints:", "Authentication:"
+- Contains technical URLs (http/https patterns)
+- Contains structured data about APIs, endpoints, sources
+
+### If Spec Detected
+
+1. **Inform and Offer Choice:**
+
+   Say: "I notice you've provided what looks like a specification document. I can either:
+
+   A) Extract requirements from your spec (faster)
+   B) Walk you through my standard interview questions
+
+   Which would you prefer?"
+
+2. **If User Chooses Spec Extraction:**
+
+   Parse the spec document intelligently for these 7 required values:
+
+   - **Data Source**: Look for organization/company names, "source:", "from", provider names (e.g., NYISO, MISO, CAISO)
+   - **Data Type**: Look for "dataset", "data type", "collecting", specific data names (e.g., "load forecast", "price actual")
+   - **Collection Method**: Infer from keywords:
+     - "API", "endpoint", "REST", "HTTP", "request" → HTTP/REST API
+     - "website", "scrape", "HTML", "webpage", "parse" → Website Parsing
+     - "FTP", "SFTP", "file server", "download files" → FTP/SFTP
+     - "email", "attachment", "inbox", "IMAP" → Email attachments
+   - **Data Format**: Look for "JSON", "CSV", "XML", "Excel", "PDF", "HTML", etc.
+   - **Update Frequency**: Look for timing keywords:
+     - "real-time", "continuous", "streaming" → Real-time
+     - "5 minutes", "every 5 min" → Every 5 minutes
+     - "hourly", "every hour", "once per hour" → Hourly
+     - "daily", "once a day", "every day" → Daily
+     - "weekly", "once a week" → Weekly
+   - **Historical Support**: Look for historical data indicators:
+     - "historical", "backfill", "past data", "since", "from date" → Yes
+     - "no historical", "only current", "live only" → No
+   - **Authentication**: Look for auth keywords:
+     - "API key", "api_key", "X-API-Key" → API Key
+     - "OAuth", "OAuth 2.0", "bearer token" → OAuth 2.0
+     - "basic auth", "username password" → Basic Auth
+     - "certificate", "client cert", "SSL cert" → Certificate
+     - "no auth", "public", "open" → None
+
+   **Additional Details to Extract (if HTTP/REST API method):**
+   - Base URL: Extract http/https URLs
+   - Endpoints: Look for path patterns, API routes
+   - Query Parameters: Look for parameter names, request examples
+   - Rate Limits: Look for "rate limit", "throttle", "requests per minute/hour"
+
+3. **Show Extracted Values for Confirmation:**
+
+   Display in clear, structured format:
+
+   ```
+   I extracted the following requirements from your spec:
+
+   ✓ Data Source: {extracted_source}
+   ✓ Data Type: {extracted_type}
+   ✓ Collection Method: {extracted_method}
+   ✓ Data Format: {extracted_format}
+   ✓ Update Frequency: {extracted_frequency}
+   ✓ Historical Support: {extracted_historical}
+   ✓ Authentication: {extracted_auth}
+
+   [If HTTP/REST API method, also show:]
+   ✓ Base URL: {extracted_base_url}
+   ✓ Endpoint: {extracted_endpoint}
+   ✓ Query Parameters: {extracted_params}
+   ✓ Rate Limits: {extracted_rate_limits}
+   ```
+
+4. **Use AskUserQuestion for Confirmation:**
+
+   ```json
+   {
+     "questions": [
+       {
+         "question": "Are these extracted requirements correct?",
+         "header": "Confirm Spec",
+         "multiSelect": false,
+         "options": [
+           {
+             "label": "Yes, proceed with these values",
+             "description": "Continue with the extracted requirements"
+           },
+           {
+             "label": "No, let me answer questions instead",
+             "description": "Switch to standard interview process"
+           },
+           {
+             "label": "Partially correct",
+             "description": "I'll tell you what needs correction"
+           }
+         ]
+       }
+     ]
+   }
+   ```
+
+5. **Handle User Response:**
+
+   - **If "Yes, proceed"**:
+     - Store all extracted values
+     - Skip all Batch 1-2 questions (7 questions total)
+     - Proceed directly to Batch 3 (collection-method-specific questions)
+
+   - **If "No, let me answer questions instead"**:
+     - Discard extracted values
+     - Proceed to standard interview (Batch 1 starting below)
+
+   - **If "Partially correct"**:
+     - Ask: "Which values need correction?" (free-form text response)
+     - For each value user mentions as incorrect:
+       - Ask the specific question for that value only
+     - Keep other extracted values
+     - Then proceed to Batch 3
+
+6. **Handling Missing Values:**
+
+   If spec parsing couldn't extract certain values with confidence:
+   - Don't guess or make assumptions
+   - Show extracted values for what WAS found
+   - List missing values clearly
+   - Ask targeted questions ONLY for missing values
+
+   Example: "I extracted most requirements but couldn't find information about authentication. What authentication method does this API use?"
+
+### If No Spec Detected
+
+Proceed directly to standard interview process (Batch 1 below).
+
+### Edge Cases
+
+1. **JIRA Ticket References**:
+   - If user says "JIRA-1234" or "see ticket" or provides JIRA URL
+   - Respond: "I cannot directly fetch JIRA tickets. Please paste the spec content from your JIRA ticket here, and I'll extract the requirements."
+   - Wait for user to paste content, then proceed with spec extraction
+
+2. **Confluence/URL References**:
+   - Similar to JIRA - cannot fetch external URLs
+   - Request user to paste content: "Please paste the content from that URL here"
+
+3. **Ambiguous Specs**:
+   - If extraction confidence is low for multiple values
+   - Inform user: "I found some information but several values are ambiguous. Would you prefer I ask clarifying questions, or switch to the standard interview?"
+   - Offer choice to clarify specific values or use standard interview
+
+4. **Partial Specs**:
+   - Extract what's clearly available
+   - Show extracted values with confidence
+   - Clearly list missing values
+   - Ask targeted questions for missing values only
+   - Example: "I extracted source=MISO and method=HTTP API, but need more details. What type of data are you collecting?"
+
 ## Interview Process
 
 ## Using AskUserQuestion Tool - REQUIRED FORMAT
