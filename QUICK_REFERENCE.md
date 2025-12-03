@@ -38,7 +38,7 @@ python sourcing/scraping/{source}/scraper_{source}_{type}_http.py \
 | Component | Pattern |
 |-----------|---------|
 | Redis Keys | `hash:{env}:{dgroup}:{sha256}` |
-| S3 Paths | `s3://bucket/sourcing/{dgroup}/year=YYYY/month=MM/day=DD/{file}.gz` |
+| S3 Paths | `s3://bucket/sourcing/{dgroup}/year=YYYY/month=MM/day=DD/{file}` |
 | Class Names | `{Source}{Type}Collector` (CamelCase) |
 | File Names | `scraper_{source}_{type}_{method}.py` (snake_case) |
 

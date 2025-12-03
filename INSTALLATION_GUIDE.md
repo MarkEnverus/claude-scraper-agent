@@ -155,7 +155,7 @@ python sourcing/scraping/nyiso/scraper_nyiso_hourly_load_http.py \
    - Validate content
    - Calculate SHA256 hash
    - Check Redis (skip if exists)
-   - Upload to S3 (with gzip compression)
+   - Upload to S3 (in original format)
    - Publish Kafka notification
    - Register hash in Redis
    ↓

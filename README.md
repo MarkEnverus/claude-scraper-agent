@@ -166,11 +166,13 @@ hash:dev:nyiso_load_forecast:abc123...
 ### S3 Date Partitioning
 
 ```
-s3://bucket/sourcing/{dgroup}/year={YYYY}/month={MM}/day={DD}/{filename}.gz
+s3://bucket/sourcing/{dgroup}/year={YYYY}/month={MM}/day={DD}/{filename}
 
 Example:
-s3://bucket/sourcing/nyiso_load_forecast/year=2025/month=01/day=20/load_forecast_20250120_14.json.gz
+s3://bucket/sourcing/nyiso_load_forecast/year=2025/month=01/day=20/load_forecast_20250120_14.json
 ```
+
+**Note:** Files are stored in their original format (uncompressed) to preserve file integrity and enable direct access.
 
 ### JSON Structured Logging
 

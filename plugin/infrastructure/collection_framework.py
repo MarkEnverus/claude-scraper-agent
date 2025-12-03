@@ -22,7 +22,7 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from dataclasses import dataclass
 from datetime import datetime, date
-import gzip
+# Note: Files are stored in original format (not gzipped) to preserve original file integrity
 import hashlib
 import logging
 
@@ -205,16 +205,14 @@ class BaseCollector(ABC):
 
         Example:
             >>> path = self._build_s3_path(candidate)
-            >>> # s3://bucket/sourcing/nyiso_load/year=2025/month=01/day=20/load_20250120_14.json.gz
+            >>> # s3://bucket/sourcing/nyiso_load/year=2025/month=01/day=20/load_20250120_14.json
         """
         year = candidate.file_date.year
         month = f"{candidate.file_date.month:02d}"
         day = f"{candidate.file_date.day:02d}"
 
-        # Add .gz extension if not present
+        # Use original filename (no .gz extension)
         filename = candidate.identifier
-        if not filename.endswith(".gz"):
-            filename += ".gz"
 
         return (
             f"s3://{self.s3_bucket}/{self.s3_prefix}/{self.dgroup}/"
@@ -222,7 +220,7 @@ class BaseCollector(ABC):
         )
 
     def _upload_to_s3(self, content: bytes, s3_path: str) -> tuple[str, str]:
-        """Upload content to S3 with gzip compression.
+        """Upload content to S3 in original format (uncompressed).
 
         Args:
             content: Raw content bytes
@@ -240,25 +238,20 @@ class BaseCollector(ABC):
             bucket = path_parts[0]
             key = path_parts[1]
 
-            # Compress content
-            compressed = gzip.compress(content)
-
             logger.debug(
                 f"Uploading to S3",
                 extra={
                     "bucket": bucket,
                     "key": key,
-                    "original_size": len(content),
-                    "compressed_size": len(compressed),
-                    "compression_ratio": f"{len(compressed) / len(content):.2%}"
+                    "size": len(content)
                 }
             )
 
-            # Upload to S3
+            # Upload to S3 in original format
             response = self.s3_client.put_object(
                 Bucket=bucket,
                 Key=key,
-                Body=compressed
+                Body=content
             )
 
             version_id = response.get("VersionId", "")
@@ -306,7 +299,7 @@ class BaseCollector(ABC):
             message = ScraperNotificationMessage(
                 dataset=self.dgroup,
                 environment=self.environment,
-                urn=candidate.identifier.replace(".gz", ""),  # Remove .gz for URN
+                urn=candidate.identifier,
                 location=s3_path,
                 version=datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"),
                 etag=etag,

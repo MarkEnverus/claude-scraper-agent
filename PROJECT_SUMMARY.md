@@ -129,8 +129,9 @@ cd /Users/mark.johnson/Desktop/source/repos/mark.johnson/claude_scraper_agent
 - **Purpose:** Content-based deduplication
 
 ### 2. S3 Date Partitioning
-- **Pattern:** `s3://{bucket}/{prefix}/{dgroup}/year={YYYY}/month={MM}/day={DD}/{filename}.gz`
-- **Benefits:** Efficient queries, lifecycle policies, partition pruning
+- **Pattern:** `s3://{bucket}/{prefix}/{dgroup}/year={YYYY}/month={MM}/day={DD}/{filename}`
+- **Storage:** Files stored in original format (uncompressed) to preserve file integrity
+- **Benefits:** Efficient queries, lifecycle policies, partition pruning, direct file access
 
 ### 3. Kafka Notifications
 - **Retained:** Existing `ScraperNotificationMessage` pattern
