@@ -25,6 +25,7 @@ from datetime import datetime, date
 # Note: Files are stored in original format (not gzipped) to preserve original file integrity
 import hashlib
 import logging
+import re
 
 import boto3
 
@@ -108,6 +109,18 @@ class BaseCollector(ABC):
             hash_ttl_days: Hash registry TTL in days (default 365)
         """
         self.dgroup = dgroup
+
+        # Validate dgroup parameter
+        import re
+        if not dgroup:
+            raise ValueError("dgroup cannot be empty")
+
+        if not re.match(r'^[a-z0-9_]+$', dgroup):
+            raise ValueError(
+                f"Invalid dgroup '{dgroup}'. "
+                "Only lowercase letters, numbers, and underscores allowed."
+            )
+
         self.s3_bucket = s3_bucket
         self.s3_prefix = s3_prefix
         self.environment = environment
@@ -192,6 +205,29 @@ class BaseCollector(ABC):
         """
         return len(content) > 0
 
+    def _validate_s3_path_component(self, component: str, name: str) -> None:
+        """Validate S3 path component for safety.
+
+        Args:
+            component: The path component to validate
+            name: Name of component for error messages
+
+        Raises:
+            ValueError: If component contains path traversal or invalid chars
+        """
+        import re
+
+        if not component:
+            raise ValueError(f"{name} cannot be empty")
+
+        # Check for path traversal
+        if '..' in component or component.startswith('/'):
+            raise ValueError(f"Path traversal detected in {name}: {component}")
+
+        # Check for invalid characters (allow alphanumeric, underscore, hyphen, dot)
+        if not re.match(r'^[a-zA-Z0-9_\-\.]+$', component):
+            raise ValueError(f"Invalid characters in {name}: {component}")
+
     def _build_s3_path(self, candidate: DownloadCandidate) -> str:
         """Build S3 path with date partitioning.
 
@@ -207,6 +243,10 @@ class BaseCollector(ABC):
             >>> path = self._build_s3_path(candidate)
             >>> # s3://bucket/sourcing/nyiso_load/year=2025/month=01/day=20/load_20250120_14.json
         """
+        # Validate path components for security
+        self._validate_s3_path_component(self.dgroup, "dgroup")
+        self._validate_s3_path_component(candidate.identifier, "identifier")
+
         year = candidate.file_date.year
         month = f"{candidate.file_date.month:02d}"
         day = f"{candidate.file_date.day:02d}"
