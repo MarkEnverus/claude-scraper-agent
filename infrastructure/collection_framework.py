@@ -111,7 +111,6 @@ class BaseCollector(ABC):
         self.dgroup = dgroup
 
         # Validate dgroup parameter
-        import re
         if not dgroup:
             raise ValueError("dgroup cannot be empty")
 
@@ -121,8 +120,30 @@ class BaseCollector(ABC):
                 "Only lowercase letters, numbers, and underscores allowed."
             )
 
+        # Validate S3 bucket name
+        if not s3_bucket:
+            raise ValueError("s3_bucket cannot be empty")
+
+        if not re.match(r'^[a-z0-9\-\.]+$', s3_bucket):
+            raise ValueError(
+                f"Invalid S3 bucket name '{s3_bucket}'. "
+                "Only lowercase letters, numbers, hyphens, and dots allowed."
+            )
+
+        # Validate S3 prefix (no path traversal)
+        if '..' in s3_prefix or s3_prefix.startswith('/'):
+            raise ValueError(f"Path traversal detected in s3_prefix: {s3_prefix}")
+
+        if s3_prefix and not re.match(r'^[a-z0-9_\-\/]*$', s3_prefix):
+            raise ValueError(
+                f"Invalid characters in s3_prefix '{s3_prefix}'. "
+                "Only lowercase letters, numbers, underscores, hyphens, and slashes allowed."
+            )
+
+        # Normalize prefix (remove leading/trailing slashes)
+        self.s3_prefix = s3_prefix.strip('/')
+
         self.s3_bucket = s3_bucket
-        self.s3_prefix = s3_prefix
         self.environment = environment
         self.hash_registry = HashRegistry(redis_client, environment, hash_ttl_days)
         self.s3_client = boto3.client("s3")
@@ -215,8 +236,6 @@ class BaseCollector(ABC):
         Raises:
             ValueError: If component contains path traversal or invalid chars
         """
-        import re
-
         if not component:
             raise ValueError(f"{name} cannot be empty")
 
