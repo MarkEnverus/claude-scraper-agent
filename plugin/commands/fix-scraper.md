@@ -119,10 +119,10 @@ After user approval:
 
 After applying fixes, run quality checks to ensure no new issues were introduced:
 
-Use Task tool with subagent_type='code-quality-checker':
+Use Task tool with subagent_type='scraper-dev:code-quality-checker':
 ```python
 Task(
-    subagent_type='code-quality-checker',
+    subagent_type='scraper-dev:code-quality-checker',
     description='Check quality after fix',
     prompt=f"""
     Run mypy and ruff checks on the fixed scraper:
