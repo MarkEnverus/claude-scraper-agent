@@ -2,6 +2,7 @@
 description: Master orchestrator for scraper generation
 tools: Bash, Read, Write
 permissionMode: bypassPermissions  # or acceptEdits
+stateless: true  # Don't carry forward conversation context between invocations
 ---
 
 # Scraper Generator Agent
