@@ -236,6 +236,8 @@ class BaseCollector(ABC):
         Raises:
             ValueError: If component contains path traversal or invalid chars
         """
+        import re
+
         if not component:
             raise ValueError(f"{name} cannot be empty")
 
