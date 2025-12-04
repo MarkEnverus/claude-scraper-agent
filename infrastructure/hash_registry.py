@@ -104,7 +104,27 @@ class HashRegistry:
             >>> registry._make_key('nyiso_load', 'abc123')
             'hash:dev:nyiso_load:abc123'
         """
+        self._validate_dgroup(dgroup)
         return f"hash:{self.environment}:{dgroup}:{content_hash}"
+
+    def _validate_dgroup(self, dgroup: str) -> None:
+        """Validate dgroup contains only safe characters.
+
+        Args:
+            dgroup: Data group identifier
+
+        Raises:
+            ValueError: If dgroup contains invalid characters
+        """
+        import re
+        if not dgroup:
+            raise ValueError("dgroup cannot be empty")
+
+        if not re.match(r'^[a-z0-9_]+$', dgroup):
+            raise ValueError(
+                f"Invalid dgroup '{dgroup}'. "
+                "Only lowercase letters, numbers, and underscores allowed."
+            )
 
     def exists(self, content_hash: str, dgroup: str) -> bool:
         """Check if content hash exists in registry.
@@ -159,6 +179,7 @@ class HashRegistry:
             ...     }
             ... )
         """
+        self._validate_dgroup(dgroup)
         key = self._make_key(dgroup, content_hash)
 
         record = {
@@ -190,6 +211,7 @@ class HashRegistry:
             ...     print(f"File at: {metadata['s3_path']}")
             ...     print(f"Registered: {metadata['registered_at']}")
         """
+        self._validate_dgroup(dgroup)
         key = self._make_key(dgroup, content_hash)
         data = self.redis.get(key)
         return json.loads(data) if data else None
@@ -228,6 +250,7 @@ class HashRegistry:
             >>> count = registry.count('nyiso_load')
             >>> print(f"Total files tracked: {count}")
         """
+        self._validate_dgroup(dgroup)
         pattern = f"hash:{self.environment}:{dgroup}:*"
         cursor = 0
         count = 0
