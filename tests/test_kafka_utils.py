@@ -59,7 +59,7 @@ class TestKafkaConfiguration:
     def test_missing_topic(self):
         """Test that missing topic raises ValueError."""
         with pytest.raises(ValueError, match="Topic is required"):
-            KafkaConfiguration("kafka://localhost:9092/")
+            KafkaConfiguration("kafka://kafka.example.com:9092/")
 
     def test_producer_cfg_dict_plaintext(self):
         """Test producer configuration dict for PLAINTEXT."""
@@ -133,6 +133,124 @@ class TestKafkaConfiguration:
             assert config.sasl_password is None
             # Check that a warning was logged
             assert any("SASL credentials not found" in record.message for record in caplog.records)
+
+    def test_valid_topic_names(self):
+        """Test that valid topic names are accepted."""
+        valid_topics = [
+            "simple-topic",
+            "topic_with_underscores",
+            "topic.with.dots",
+            "UPPERCASE-TOPIC",
+            "MixedCase_Topic.123",
+            "a",  # Single character
+            "topic-123_test.data",
+        ]
+
+        for topic in valid_topics:
+            conn_str = f"kafka://kafka.example.com:9092/{topic}"
+            config = KafkaConfiguration(conn_str)
+            assert config.topic == topic
+
+    def test_invalid_topic_with_special_chars(self):
+        """Test that topic names with invalid characters are rejected."""
+        invalid_topics = [
+            "topic/with/slash",
+            "topic with spaces",
+            "topic@with@at",
+            "topic$with$dollar",
+            "topic!with!exclamation",
+        ]
+
+        for topic in invalid_topics:
+            conn_str = f"kafka://kafka.example.com:9092/{topic}"
+            with pytest.raises(ValueError, match="Invalid topic name"):
+                KafkaConfiguration(conn_str)
+
+    def test_topic_name_too_long(self):
+        """Test that topic names exceeding 249 characters are rejected."""
+        # Create a topic name with 250 characters (exceeds limit)
+        long_topic = "a" * 250
+        conn_str = f"kafka://kafka.example.com:9092/{long_topic}"
+
+        with pytest.raises(ValueError, match="Topic name too long"):
+            KafkaConfiguration(conn_str)
+
+    def test_topic_name_max_length_valid(self):
+        """Test that topic name with exactly 249 characters is accepted."""
+        # Create a topic name with 249 characters (at limit)
+        max_topic = "a" * 249
+        conn_str = f"kafka://kafka.example.com:9092/{max_topic}"
+
+        config = KafkaConfiguration(conn_str)
+        assert config.topic == max_topic
+        assert len(config.topic) == 249
+
+    def test_empty_topic_after_validation(self):
+        """Test that empty topic name is rejected during validation."""
+        # This should be caught by the existing check before validation
+        # but testing the validation method's behavior
+        conn_str = f"kafka://kafka.example.com:9092/"
+        with pytest.raises(ValueError, match="Topic is required"):
+            KafkaConfiguration(conn_str)
+
+    def test_valid_hostnames(self):
+        """Test that valid hostnames are accepted."""
+        valid_hostnames = [
+            "kafka.example.com",
+            "kafka-prod.company.com",
+            "kafka1.example.com",
+            "8.8.8.8",  # Google DNS (truly public IP)
+            "kafka-01.prod.example.com",
+        ]
+
+        for hostname in valid_hostnames:
+            conn_str = f"kafka://{hostname}:9092/test-topic"
+            config = KafkaConfiguration(conn_str)
+            assert hostname in config.bootstrap_server
+
+    def test_localhost_blocked(self):
+        """Test that localhost connections are blocked."""
+        localhost_tests = [
+            ("localhost", "localhost"),
+            ("127.0.0.1", "127.0.0.1"),
+            ("[::1]", "::1"),  # IPv6 needs brackets in URL, urlparse extracts ::1
+        ]
+
+        for conn_hostname, _ in localhost_tests:
+            conn_str = f"kafka://{conn_hostname}:9092/test-topic"
+            with pytest.raises(ValueError, match="localhost connections not allowed"):
+                KafkaConfiguration(conn_str)
+
+    def test_private_ip_ranges_blocked(self):
+        """Test that private IP address ranges are blocked."""
+        private_ips = [
+            "10.0.0.1",       # 10.0.0.0/8
+            "10.255.255.255",
+            "172.16.0.1",     # 172.16.0.0/12
+            "172.31.255.255",
+            "192.168.0.1",    # 192.168.0.0/16
+            "192.168.255.255",
+            "169.254.0.1",    # 169.254.0.0/16 (link-local)
+            "169.254.255.255",
+        ]
+
+        for ip in private_ips:
+            conn_str = f"kafka://{ip}:9092/test-topic"
+            with pytest.raises(ValueError, match="Private/local IP addresses not allowed"):
+                KafkaConfiguration(conn_str)
+
+    def test_invalid_hostname_format(self):
+        """Test that hostnames with invalid characters are rejected."""
+        invalid_hostnames = [
+            "kafka_with_underscore.com",  # Underscores not allowed in hostnames
+            "kafka with spaces.com",
+            "kafka$example.com",
+        ]
+
+        for hostname in invalid_hostnames:
+            conn_str = f"kafka://{hostname}:9092/test-topic"
+            with pytest.raises(ValueError, match="Invalid hostname format"):
+                KafkaConfiguration(conn_str)
 
 
 class TestKafkaProducer:

@@ -77,6 +77,9 @@ class KafkaConfiguration:
                     f"Invalid connection string schema: {parsed.scheme}. Expected: kafka"
                 )
 
+            # Validate hostname to prevent SSRF
+            self._validate_hostname(parsed.hostname)
+
             # Server configuration
             self.bootstrap_server = f"{parsed.hostname}:{parsed.port}"
 
@@ -84,6 +87,9 @@ class KafkaConfiguration:
             self.topic = parsed.path[1:]  # Remove leading '/'
             if not self.topic:
                 raise ValueError("Topic is required in connection string")
+
+            # Validate topic name
+            self._validate_topic(self.topic)
 
             # Security protocol
             self.security_protocol = query_dict.get(
@@ -99,10 +105,70 @@ class KafkaConfiguration:
                 sasl_file
             )
 
+        except ValueError:
+            # Re-raise ValueError from validation methods with original message
+            raise
         except Exception as e:
             raise ValueError(
                 f"Error parsing Kafka connection string: {connection_string}"
             ) from e
+
+    def _validate_topic(self, topic: str) -> None:
+        """Validate Kafka topic name.
+
+        Args:
+            topic: Topic name to validate
+
+        Raises:
+            ValueError: If topic name is invalid
+        """
+        import re
+
+        if not topic:
+            raise ValueError("Topic name cannot be empty")
+
+        if len(topic) > 249:
+            raise ValueError(f"Topic name too long: {len(topic)} chars > 249 chars")
+
+        if not re.match(r'^[a-zA-Z0-9._\-]+$', topic):
+            raise ValueError(
+                f"Invalid topic name '{topic}'. "
+                "Only alphanumeric characters, dots, underscores, and hyphens allowed."
+            )
+
+    def _validate_hostname(self, hostname: str) -> None:
+        """Validate hostname to prevent SSRF attacks.
+
+        Args:
+            hostname: Hostname to validate
+
+        Raises:
+            ValueError: If hostname is invalid or points to private/local IP ranges
+        """
+        import re
+        import ipaddress
+
+        if not hostname:
+            raise ValueError("Hostname cannot be empty")
+
+        # Basic hostname validation (allow : for IPv6)
+        if not re.match(r'^[a-zA-Z0-9\-\.\:]+$', hostname):
+            raise ValueError(f"Invalid hostname format: {hostname}")
+
+        # Block localhost
+        if hostname.lower() in ['localhost', '127.0.0.1', '::1']:
+            raise ValueError(f"localhost connections not allowed: {hostname}")
+
+        # Try parsing as IP to check for private ranges
+        try:
+            ip = ipaddress.ip_address(hostname)
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                raise ValueError(f"Private/local IP addresses not allowed: {hostname}")
+        except ValueError as e:
+            # Re-raise our validation errors, but ignore IP parsing errors
+            if "not allowed" in str(e):
+                raise
+            pass  # Not an IP, hostname is ok
 
     @property
     def producer_cfg_dict(self) -> Dict[str, str]:
@@ -142,6 +208,67 @@ class KafkaConfiguration:
             "sasl.mechanism": self.sasl_mechanism,
         }
 
+    def _validate_sasl_file_path(self, filepath: str) -> None:
+        """Validates SASL credentials file path for security.
+
+        Performs security checks on the credentials file path:
+        - Verifies file exists and is a regular file (not symlink, socket, etc.)
+        - Checks path is within allowed directories
+        - Prevents path traversal attacks
+        - Validates file permissions (should not be world-readable)
+
+        Args:
+            filepath: Path to the SASL credentials file
+
+        Raises:
+            ValueError: If any validation check fails
+        """
+        from pathlib import Path
+        import stat
+
+        path = Path(filepath).resolve()
+
+        # Check file exists and is regular file
+        if not path.exists():
+            raise ValueError(f"SASL credentials file not found: {filepath}")
+
+        if not path.is_file():
+            raise ValueError(f"SASL credentials path is not a regular file: {filepath}")
+
+        # Check for symlinks (security risk)
+        if path.is_symlink():
+            raise ValueError(f"Symlinks not allowed for SASL credentials: {filepath}")
+
+        # Allowed directories
+        allowed_dirs = [
+            Path('/etc/kafka'),
+            Path.home() / '.kafka',
+            Path('/tmp/kafka'),
+        ]
+
+        # Check if path is within allowed directories
+        is_allowed = any(
+            str(path).startswith(str(allowed_dir.resolve()))
+            for allowed_dir in allowed_dirs
+        )
+
+        if not is_allowed:
+            raise ValueError(
+                f"SASL credentials file must be in allowed directories "
+                f"({', '.join(str(d) for d in allowed_dirs)}): {filepath}"
+            )
+
+        # Check for path traversal in the original filepath
+        if '..' in filepath:
+            raise ValueError(f"Path traversal detected in SASL file path: {filepath}")
+
+        # Check file permissions (should not be world-readable)
+        file_stat = path.stat()
+        if file_stat.st_mode & stat.S_IROTH:
+            raise ValueError(
+                f"SASL credentials file is world-readable (insecure permissions): {filepath}"
+            )
+
     def _read_sasl_credentials(self, file_path: str) -> tuple[Optional[str], Optional[str]]:
         """Reads SASL credentials from a file or environment variables.
 
@@ -159,6 +286,9 @@ class KafkaConfiguration:
         Returns:
             Tuple of (username, password) or (None, None) if not found
 
+        Raises:
+            ValueError: If file path validation fails
+
         Note:
             Missing credentials are only a warning, not an error. This allows
             unauthenticated Kafka for development environments.
@@ -168,6 +298,9 @@ class KafkaConfiguration:
 
         # Try to read from file
         if file_path:
+            # Validate file path before reading
+            self._validate_sasl_file_path(file_path)
+
             try:
                 with open(file_path) as f:
                     credentials = json.load(f)
