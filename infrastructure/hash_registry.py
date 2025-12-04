@@ -126,6 +126,62 @@ class HashRegistry:
                 "Only lowercase letters, numbers, and underscores allowed."
             )
 
+    def _validate_metadata(self, metadata: Dict[str, Any]) -> None:
+        """Validate metadata dictionary for safety.
+
+        Args:
+            metadata: Metadata dictionary to validate
+
+        Raises:
+            ValueError: If metadata is invalid, too large, or too deeply nested
+        """
+        # Check JSON serializable
+        try:
+            serialized = json.dumps(metadata)
+        except (TypeError, ValueError) as e:
+            raise ValueError(f"Metadata not JSON serializable: {e}")
+
+        # Check size limit (1MB)
+        max_size = 1024 * 1024
+        if len(serialized) > max_size:
+            raise ValueError(
+                f"Metadata exceeds size limit: {len(serialized)} bytes > {max_size} bytes"
+            )
+
+        # Check nesting depth (prevent stack overflow)
+        if self._get_nesting_depth(metadata) > 10:
+            raise ValueError("Metadata nesting too deep (max 10 levels)")
+
+        # Validate keys
+        for key, value in metadata.items():
+            if not isinstance(key, str):
+                raise ValueError(f"Metadata keys must be strings, got {type(key)}")
+
+            if len(key) > 255:
+                raise ValueError(f"Metadata key too long: {len(key)} chars > 255 chars")
+
+    def _get_nesting_depth(self, obj: Any, depth: int = 0) -> int:
+        """Calculate nesting depth of dict/list structure.
+
+        Args:
+            obj: Object to analyze
+            depth: Current depth level
+
+        Returns:
+            Maximum nesting depth
+        """
+        if isinstance(obj, dict):
+            return max(
+                (self._get_nesting_depth(v, depth + 1) for v in obj.values()),
+                default=depth
+            )
+        elif isinstance(obj, list):
+            return max(
+                (self._get_nesting_depth(item, depth + 1) for item in obj),
+                default=depth
+            )
+        return depth
+
     def exists(self, content_hash: str, dgroup: str) -> bool:
         """Check if content hash exists in registry.
 
@@ -180,6 +236,7 @@ class HashRegistry:
             ... )
         """
         self._validate_dgroup(dgroup)
+        self._validate_metadata(metadata)
         key = self._make_key(dgroup, content_hash)
 
         record = {
