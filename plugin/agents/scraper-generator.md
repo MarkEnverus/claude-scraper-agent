@@ -121,7 +121,7 @@ Config files use YAML frontmatter (EXAMPLE FORMAT - values shown are for illustr
 data_source: NYISO  # EXAMPLE ONLY
 data_type: load_forecast  # EXAMPLE ONLY
 collection_method: HTTP/REST API
-data_format: JSON
+data_format: JSON  # Default format (can be overridden to CSV, XML, etc.)
 update_frequency: hourly
 historical_support: yes
 authentication: API Key
@@ -192,6 +192,9 @@ Check for these indicators that suggest user provided a spec:
      - "FTP", "SFTP", "file server", "download files" → FTP/SFTP
      - "email", "attachment", "inbox", "IMAP" → Email attachments
    - **Data Format**: Look for "JSON", "CSV", "XML", "Excel", "PDF", "HTML", etc.
+     - **JSON Preference**: If multiple formats are mentioned and JSON is among them, automatically select JSON
+     - If only non-JSON formats mentioned, extract the primary format
+     - If no format mentioned, default to JSON
    - **Update Frequency**: Look for timing keywords:
      - "real-time", "continuous", "streaming" → Real-time
      - "5 minutes", "every 5 min" → Every 5 minutes
@@ -392,19 +395,47 @@ Proceed directly to standard interview process (Batch 1 below).
       ]
     },
     {
-      "question": "What format is the raw data in?",
+      "question": "The data format will be JSON (recommended). Do you need a different format?",
       "header": "Format",
       "multiSelect": false,
       "options": [
         {
-          "label": "Enter format",
-          "description": "Type the data format (e.g., JSON, CSV, XML, PDF)"
+          "label": "No, use JSON",
+          "description": "JSON is the recommended format for structured data"
+        },
+        {
+          "label": "Yes, different format",
+          "description": "Specify a different format (CSV, XML, PDF, etc.)"
         }
       ]
     }
   ]
 }
 ```
+
+**IMPORTANT: Format Follow-up Logic**
+
+If user selects "Yes, different format" for the format question, immediately follow up with:
+
+```json
+{
+  "questions": [
+    {
+      "question": "What format is the raw data in?",
+      "header": "Format",
+      "multiSelect": false,
+      "options": [
+        {
+          "label": "Enter format",
+          "description": "Type the data format (e.g., CSV, XML, PDF)"
+        }
+      ]
+    }
+  ]
+}
+```
+
+If user selects "No, use JSON", proceed with `data_format = "JSON"` to Batch 2.
 
 ### Example: Batch 2 Questions
 
@@ -613,16 +644,26 @@ Ask these ONLY if Collection Method == "Website Parsing":
 - If value EXISTS in config file → Use it silently, don't ask
 - If value NOT in config → Ask user with AskUserQuestion (clean question, no defaults shown)
 
+**Special handling for data_format:**
+- If `data_format` in config file → Use it from config (unchanged)
+- If `data_format` NOT in config → Default to JSON, ask user for confirmation/override
+  - Ask: "The data format will be JSON (recommended). Do you need a different format?"
+  - If user confirms JSON → Use JSON
+  - If user needs different format → Follow up with text input for format
+
 **Example:**
 ```
 Config has: data_source=NYISO, data_type=load_forecast
-Config missing: api_base_url, api_endpoint
+Config missing: data_format, api_base_url, api_endpoint
 
 Your behavior:
 1. Skip question for data_source (use NYISO from config)
 2. Skip question for data_type (use load_forecast from config)
-3. ASK: "What is the base URL for the API?" (clean, no defaults)
-4. ASK: "What is the endpoint path?" (clean, no defaults)
+3. ASK: "The data format will be JSON (recommended). Do you need a different format?"
+   - If "No, use JSON" → data_format = "JSON"
+   - If "Yes, different format" → Follow up: "What format is the raw data in?"
+4. ASK: "What is the base URL for the API?" (clean, no defaults)
+5. ASK: "What is the endpoint path?" (clean, no defaults)
 ```
 
 ### Required Questions (Ask if NOT in config)
@@ -641,8 +682,10 @@ Ask questions in 3 batches:
 3. **Collection Method** - Radio buttons (HTTP/REST API, Website Parsing, FTP/SFTP, Email)
    - Purpose: Determines which specialist agent to use
 
-4. **Data Format** - Text input only (no predefined options)
-   - Purpose: Influences content validation logic
+4. **Data Format** - Confirmation with override option (defaults to JSON)
+   - Purpose: Influences content validation logic, JSON is preferred for structured data
+   - Default behavior: Automatically selects JSON, asks user if they need different format
+   - If override needed: User can specify CSV, XML, PDF, or other formats
 
 **Batch 2 - Additional Details (3 questions):**
 5. **Update Frequency** - Radio buttons (Real-time, Every 5 min, Hourly, Daily, Weekly)
