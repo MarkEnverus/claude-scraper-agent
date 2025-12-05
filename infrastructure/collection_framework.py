@@ -19,7 +19,7 @@ Example:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Any, Optional, TypedDict
 from dataclasses import dataclass
 from datetime import datetime, date
 # Note: Files are stored in original format (not gzipped) to preserve original file integrity
@@ -62,6 +62,23 @@ class DownloadCandidate:
     metadata: Dict[str, Any]
     collection_params: Dict[str, Any]
     file_date: date
+
+
+class CollectionResults(TypedDict):
+    """Type definition for collection run results.
+
+    Attributes:
+        total_candidates: Total number of candidates generated
+        collected: Number of candidates successfully collected
+        skipped_duplicate: Number of candidates skipped (hash exists)
+        failed: Number of candidates that failed collection
+        errors: List of error details for failed candidates
+    """
+    total_candidates: int
+    collected: int
+    skipped_duplicate: int
+    failed: int
+    errors: List[Dict[str, str]]
 
 
 class BaseCollector(ABC):
@@ -300,7 +317,7 @@ class BaseCollector(ABC):
             key = path_parts[1]
 
             logger.debug(
-                f"Uploading to S3",
+                "Uploading to S3",
                 extra={
                     "bucket": bucket,
                     "key": key,
@@ -400,7 +417,7 @@ class BaseCollector(ABC):
         force: bool = False,
         skip_hash_check: bool = False,
         **candidate_params
-    ) -> Dict[str, Any]:
+    ) -> CollectionResults:
         """Main collection loop.
 
         Orchestrates the complete collection process:
@@ -462,7 +479,7 @@ class BaseCollector(ABC):
                 "errors": [{"candidate": "generation", "error": str(e)}]
             }
 
-        results = {
+        results: CollectionResults = {
             "total_candidates": len(candidates),
             "collected": 0,
             "skipped_duplicate": 0,

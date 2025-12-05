@@ -832,51 +832,125 @@ After specialist completes, verify:
 - ✅ README documentation generated
 - ✅ All imports are correct
 
-## Code Quality Checks (Auto-run After Generation)
+## Code Quality Validation (Automatic 4-Phase Pipeline)
 
-After the specialist completes and basic validation passes, automatically run quality checks:
+After the specialist completes and basic validation passes, automatically run comprehensive QA validation:
 
-1. **Check if pyproject.toml exists in project root**
-   ```bash
-   ls pyproject.toml 2>/dev/null
-   ```
+**IMPORTANT**: This uses the NEW automatic mode - fully automatic with retry logic, no user approval needed.
 
-   If missing:
-   - Inform user: "No pyproject.toml found. Installing code quality configuration..."
-   - Use Read tool: `${CLAUDE_PLUGIN_ROOT}/infrastructure/pyproject.toml.template`
-   - Use Write tool to create `pyproject.toml` in project root
-   - Report: "✅ Installed pyproject.toml with mypy and ruff configuration"
+### Invoke Enhanced Code Quality Checker
 
-2. **Invoke Code Quality Checker**
+Use Task tool with subagent_type='scraper-dev:code-quality-checker':
 
-   Use Task tool with subagent_type='code-quality-checker':
-   ```python
-   Task(
-       subagent_type='code-quality-checker',
-       description='Check quality of generated scraper',
-       prompt=f"""
-       Run mypy and ruff checks on the generated scraper:
+```python
+Task(
+    subagent_type='scraper-dev:code-quality-checker',
+    description='Validate generated scraper',
+    prompt=f"""
+    Run automatic QA validation pipeline on the generated scraper.
 
-       File: {scraper_file_path}
+    Mode: auto (fully automatic, no user approval)
+    Scraper path: {scraper_file_path}
 
-       Process:
-       1. Check if mypy and ruff are installed
-       2. Run mypy type checking
-       3. Run ruff style checking
-       4. Report results
-       5. Offer to auto-fix any issues
-       6. Re-run checks after fixes
+    The agent will automatically:
+    - Phase 1: Run all 4 checks (mypy, ruff, pytest, UV standards)
+    - Phase 2: Auto-fix issues (conservative fixes)
+    - Phase 3: Retry with aggressive fixes if needed
+    - Phase 4: Generate final report
 
-       Only complete when checks pass or user approves remaining issues.
-       """
-   )
-   ```
+    Maximum 3 phases (1 validation + 2 fix attempts).
 
-3. **Report Final Status**
+    Return the validation result when complete.
+    """
+)
+```
 
-   After quality checker completes:
-   - ✅ All quality checks passed - code is type-safe and style-compliant
-   - ⚠️  Some issues remain - user acknowledged
+### Parse Validation Result
+
+After the validation agent completes, it returns structured data. Extract:
+
+- `final_result`: "success" or "failure"
+- `total_fixes_applied`: Number of auto-fixes applied
+- `final_check_status`: Status of each check (mypy, ruff, pytest, UV)
+- `remaining_issues`: List of unfixed issues (if any)
+
+### Report Final Status to User
+
+**If validation succeeded (`final_result == "success"`):**
+
+```
+✅ Scraper Generated and Validated Successfully!
+
+Generated Files:
+  - {scraper_file_path}
+  - {test_file_path}
+  - {readme_file_path}
+
+QA Validation Results:
+  ✅ mypy: 0 type errors
+  ✅ ruff: 0 style issues
+  ✅ pytest: All tests passed
+  ✅ UV standards: Valid
+
+Auto-fixes applied: {total_fixes_applied}
+  - {fix_summary}
+
+Validation reports saved to:
+  - qa_final_report.json
+  - qa_validation_phase{N}.json
+
+Your scraper is production-ready!
+```
+
+**If validation incomplete (`final_result == "failure"`):**
+
+```
+✅ Scraper Generated (⚠️ QA validation incomplete)
+
+Generated Files:
+  - {scraper_file_path}
+  - {test_file_path}
+  - {readme_file_path}
+
+⚠️  QA Validation Incomplete:
+  Attempted {total_phases} validation phases
+  Applied {total_fixes_applied} auto-fixes
+
+Remaining Issues:
+  ❌ mypy: {N} type errors
+  ❌ pytest: {M} test failures
+
+Manual fixes needed. Review:
+  - qa_final_report.json
+  - qa_outputs/mypy_output.txt
+  - qa_outputs/pytest_console.txt
+
+The scraper is generated but requires manual fixes before production use.
+```
+
+### What the Validation Pipeline Checks
+
+**All 4 checks must pass for success:**
+
+1. **Mypy Type Checking** - No type errors
+2. **Ruff Style/Linting** - Code follows style guidelines
+3. **Pytest Test Execution** - All tests pass
+4. **UV Standards** - Valid pyproject.toml with mypy/ruff configs
+
+**Auto-fix capabilities:**
+- Phase 2 (Conservative): ruff --fix, simple type hints, import errors, missing pyproject.toml
+- Phase 3 (Aggressive): Complex types (Union, Optional, Any), type: ignore comments
+
+### Expected Outcome
+
+In most cases:
+- Phase 1 detects issues (ruff style, minor mypy errors)
+- Phase 2 auto-fixes them successfully
+- Validation completes with "success" status
+
+For complex scrapers:
+- May require Phase 3 aggressive fixes
+- Or may require manual intervention for business logic issues
    - ❌ Quality checks failed - manual intervention needed
 
 Example final output:

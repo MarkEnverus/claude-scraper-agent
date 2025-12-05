@@ -22,7 +22,7 @@ Example:
 import hashlib
 import json
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict, Optional, cast, List
 
 import redis
 
@@ -51,7 +51,7 @@ class HashRegistry:
         redis_client: redis.Redis,
         environment: str,
         ttl_days: int = 365
-    ):
+    ) -> None:
         """Initialize hash registry.
 
         Args:
@@ -197,7 +197,7 @@ class HashRegistry:
             ...     print("Already downloaded, skipping")
         """
         key = self._make_key(dgroup, content_hash)
-        return self.redis.exists(key) > 0
+        return cast(int, self.redis.exists(key)) > 0
 
     def register(
         self,
@@ -270,7 +270,7 @@ class HashRegistry:
         """
         self._validate_dgroup(dgroup)
         key = self._make_key(dgroup, content_hash)
-        data = self.redis.get(key)
+        data = cast(Optional[bytes], self.redis.get(key))
         return json.loads(data) if data else None
 
     def delete(self, content_hash: str, dgroup: str) -> bool:
@@ -290,7 +290,7 @@ class HashRegistry:
             ...     print("Hash removed, file can be re-downloaded")
         """
         key = self._make_key(dgroup, content_hash)
-        return self.redis.delete(key) > 0
+        return cast(int, self.redis.delete(key)) > 0
 
     def count(self, dgroup: str) -> int:
         """Count total hashes for a data group.
@@ -313,7 +313,8 @@ class HashRegistry:
         count = 0
 
         while True:
-            cursor, keys = self.redis.scan(cursor, match=pattern, count=100)
+            result = cast(tuple[int, List[bytes]], self.redis.scan(cursor, match=pattern, count=100))
+            cursor, keys = result
             count += len(keys)
             if cursor == 0:
                 break

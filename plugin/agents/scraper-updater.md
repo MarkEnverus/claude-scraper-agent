@@ -104,7 +104,8 @@ You can:
    - Propose changes (show diff)
    - Apply after approval
    - Update version metadata
-6. Generate success report
+   - **Run automatic QA validation** (NEW)
+6. Generate success report with validation results
 
 ## Update Rules
 
@@ -201,9 +202,113 @@ Needs manual review ({count}):
 - {issues found}
 
 Next Steps:
-1. Run tests for updated scrapers
-2. Monitor for issues
+1. Review validation reports
+2. Fix any remaining issues if validation incomplete
+3. Monitor for issues
 ```
+
+## Automatic QA Validation (After Each Update)
+
+After applying updates to each scraper, automatically run comprehensive QA validation:
+
+**IMPORTANT**: This uses automatic mode - fully automatic with retry logic, no user approval needed.
+
+### Invoke Enhanced Code Quality Checker
+
+For each updated scraper, use Task tool with subagent_type='scraper-dev:code-quality-checker':
+
+```python
+Task(
+    subagent_type='scraper-dev:code-quality-checker',
+    description=f'Validate updated scraper: {scraper_name}',
+    prompt=f"""
+    Run automatic QA validation pipeline on the updated scraper.
+
+    Mode: auto (fully automatic, no user approval)
+    Scraper path: {scraper_file_path}
+
+    The agent will automatically:
+    - Phase 1: Run all 4 checks (mypy, ruff, pytest, UV standards)
+    - Phase 2: Auto-fix issues (conservative fixes)
+    - Phase 3: Retry with aggressive fixes if needed
+    - Phase 4: Generate final report
+
+    Maximum 3 phases (1 validation + 2 fix attempts).
+
+    Return the validation result when complete.
+    """
+)
+```
+
+### Track Validation Results
+
+For each scraper, store validation result:
+
+```python
+scraper_results = {
+    'path': scraper_file_path,
+    'old_version': old_version,
+    'new_version': '1.3.0',
+    'validation_result': validation_result.final_result,  # "success" or "failure"
+    'fixes_applied': validation_result.total_fixes_applied,
+    'remaining_issues': validation_result.remaining_issues
+}
+```
+
+### Updated Report Format
+
+**With validation results:**
+
+```
+✅ Update and Validation Complete!
+
+Successfully updated and validated ({success_count}):
+- {scraper_path} ({old_version} → 1.3.0)
+  ✅ QA: All checks passed, {N} auto-fixes applied
+
+Updated but validation incomplete ({incomplete_count}):
+- {scraper_path} ({old_version} → 1.3.0)
+  ⚠️  QA: {M} issues remain (see qa_final_report.json)
+
+Changes applied:
+- Infrastructure version updated to 1.3.0
+- {list of other changes}
+
+Validation Summary:
+- Fully validated: {success_count} scrapers
+- Needs manual fixes: {incomplete_count} scrapers
+
+For scrapers needing manual fixes, review:
+- qa_final_report.json
+- qa_outputs/mypy_output.txt
+- qa_outputs/pytest_console.txt
+```
+
+### What Gets Validated
+
+After each update, the validation pipeline checks:
+
+1. **Mypy Type Checking** - No type errors
+2. **Ruff Style/Linting** - Code follows style guidelines
+3. **Pytest Test Execution** - All tests still pass after update
+4. **UV Standards** - Valid pyproject.toml
+
+**Auto-fix capabilities:**
+- Fixes style issues introduced by updates
+- Adds type hints if needed
+- Fixes import errors
+- Ensures tests pass with updated code
+
+### Expected Outcome
+
+For most updates:
+- Infrastructure changes don't break type checking
+- Tests pass with updated infrastructure
+- Validation completes successfully in Phase 1 or 2
+
+For complex updates:
+- May require Phase 3 aggressive fixes
+- Or may require manual intervention if breaking changes occurred
 
 ## Example Usage
 

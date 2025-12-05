@@ -25,7 +25,7 @@ import json
 import os
 import logging
 from urllib.parse import urlparse, parse_qs
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Callable
 
 from pydantic import BaseModel, Field
 
@@ -366,7 +366,7 @@ class KafkaProducer:
             self.config = cfg
             self.producer = Producer(cfg.producer_cfg_dict)
             logger.debug(
-                f"Kafka producer initialized",
+                "Kafka producer initialized",
                 extra=cfg.log_cfg_dict
             )
         except Exception as e:
@@ -506,6 +506,6 @@ class ScraperNotificationMessage(BaseModel):
 
     class Config:
         """Pydantic model configuration."""
-        json_encoders = {
+        json_encoders: Dict[type, Callable[[Any], Any]] = {
             # Add custom encoders if needed
         }
