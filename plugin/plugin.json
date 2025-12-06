@@ -1,6 +1,6 @@
 {
   "name": "scraper-dev",
-  "version": "1.4.6",
+  "version": "1.4.7",
   "description": "Automated scraper generation and API analysis for data collection pipelines. Includes enhanced business analyst for JavaScript-rendered documentation sites, scraper generators for HTTP/FTP/Email/Website sources, code quality checks, and maintenance tools",
   "author": "Claude Scraper Agent",
   "agents": [
