@@ -21,7 +21,7 @@ Example:
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, TypedDict
 from dataclasses import dataclass
-from datetime import datetime, date
+from datetime import datetime, date, UTC
 # Note: Files are stored in original format (not gzipped) to preserve original file integrity
 import hashlib
 import logging
@@ -379,12 +379,12 @@ class BaseCollector(ABC):
                 environment=self.environment,
                 urn=candidate.identifier,
                 location=s3_path,
-                version=datetime.utcnow().strftime("%Y%m%dT%H%M%SZ"),
+                version=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
                 etag=etag,
                 metadata={
-                    "publish_dtm": datetime.utcnow().isoformat() + "Z",
+                    "publish_dtm": datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
                     "s3_guid": hashlib.sha256(
-                        f"{s3_path}{datetime.utcnow().isoformat()}".encode()
+                        f"{s3_path}{datetime.now(UTC).isoformat().replace('+00:00', 'Z')}".encode()
                     ).hexdigest(),
                     "url": candidate.source_location,
                     "original_file_size": original_size,

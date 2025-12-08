@@ -27,7 +27,7 @@ import logging
 from urllib.parse import urlparse, parse_qs
 from typing import Dict, Any, Optional, Callable
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 
 logger = logging.getLogger("sourcing_app")
 
@@ -504,8 +504,7 @@ class ScraperNotificationMessage(BaseModel):
     etag: str = Field(..., description="S3 ETag of the stored file")
     metadata: Dict[str, Any] = Field(..., description="Collection and file metadata")
 
-    class Config:
-        """Pydantic model configuration."""
-        json_encoders: Dict[type, Callable[[Any], Any]] = {
-            # Add custom encoders if needed
-        }
+    model_config = ConfigDict(
+        # Pydantic v2 configuration
+        # json_encoders deprecated - use custom serializers if needed
+    )

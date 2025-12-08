@@ -16,7 +16,7 @@ Example:
 
 import logging
 import json
-from datetime import datetime
+from datetime import datetime, UTC
 from typing import Any, Dict
 
 
@@ -55,7 +55,7 @@ class JsonFormatter(logging.Formatter):
             in the output JSON.
         """
         log_data = {
-            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "timestamp": datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
             "level": record.levelname,
             "logger": record.name,
             "message": record.getMessage(),
