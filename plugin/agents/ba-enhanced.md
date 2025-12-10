@@ -33,14 +33,123 @@ Phase 3: Cross-Check & Validation    → validated_datasource_spec.json
 
 **Tools:** WebFetch or Puppeteer for initial reconnaissance
 
-### Step 0.1: Quick Reconnaissance
+**CRITICAL RULE**: If you cannot find the data after trying the steps below, **STOP AND ASK THE USER FOR HELP**. Do not guess, do not hallucinate, do not make up data structures. The user can provide the missing information much faster than you can guess.
 
-Use WebFetch to get initial page content:
-```
-WebFetch(url, "Identify data source type - look for API documentation, FTP links, download portals, email subscription forms")
+### When to Ask User for Help:
+1. Puppeteer network monitoring finds no API calls
+2. Common API patterns all return 404/errors
+3. Puppeteer cannot extract meaningful data from the page
+4. You're spending more than 3-4 tool calls trying to find data
+5. You're uncertain about the data structure
+
+### Step 0.1: Use Puppeteer to Monitor Network Traffic
+
+**CRITICAL**: Modern portals often load data via API calls. Use Puppeteer with Network monitoring to discover these endpoints:
+
+```javascript
+// Navigate and monitor ALL network requests
+mcp__puppeteer__navigate(url)
+
+// Wait for page to fully load
+await new Promise(resolve => setTimeout(resolve, 5000));
+
+// Check Performance API for network requests
+const resources = performance.getEntriesByType('resource');
+const apiCalls = resources.filter(r =>
+  r.name.includes('/api/') ||
+  r.name.includes('/data/') ||
+  r.name.includes('.json') ||
+  r.initiatorType === 'fetch' ||
+  r.initiatorType === 'xmlhttprequest'
+);
+
+// Return list of discovered API endpoints
 ```
 
-### Step 0.2: Analyze Type Indicators
+**If API endpoints discovered**: Test them with WebFetch to see if they return structured data.
+
+### Step 0.2: If Network Monitoring Finds Nothing - Ask User
+
+If Puppeteer doesn't discover any API calls, **STOP and ask the user for help** using AskUserQuestion:
+
+```javascript
+AskUserQuestion({
+  questions: [{
+    question: "I couldn't find any API endpoints on this page. Can you check your browser's Network tab?",
+    header: "Need Help",
+    options: [
+      {
+        label: "I see API/XHR requests in Network tab",
+        description: "I can provide the API endpoint URL"
+      },
+      {
+        label: "No API requests, just HTML/JS/CSS",
+        description: "The page loads everything client-side"
+      },
+      {
+        label: "Not sure, need guidance",
+        description: "Show me how to check"
+      }
+    ],
+    multiSelect: false
+  }]
+})
+```
+
+**If user provides API endpoint**: Use it directly.
+**If no API exists**: Proceed with web scraping via Puppeteer.
+**If user needs guidance**: Provide these step-by-step instructions:
+
+```
+To help me find the data source, please follow these steps:
+
+1. Open the page in your browser: {url}
+2. Open Developer Tools (F12 or Cmd+Opt+I)
+3. Go to the Network tab
+4. Reload the page (Cmd+R or Ctrl+R)
+5. Look for requests that:
+   - Have "XHR" or "Fetch" type
+   - Return "application/json" content
+   - Have URLs containing "/api/", "/data/", or ".json"
+
+If you see any API requests:
+   - Right-click on the request
+   - Select "Copy" → "Copy as cURL"
+   - Paste the curl command here
+
+If you don't see any API requests:
+   - Let me know and I'll extract data directly from the HTML
+```
+
+Then use AskUserQuestion to get the curl command or confirmation of no API.
+
+### Step 0.3: Fallback - Try Common API Patterns
+
+Only after monitoring network traffic, try inferring API endpoints from the URL structure:
+
+```javascript
+// Extract base domain and path components
+const url = new URL(pageUrl);
+const pathParts = url.pathname.split('/').filter(p => p);
+
+// Try common API patterns
+const apiPatterns = [
+  `${url.origin}/api/${pathParts.join('/')}`,
+  `${url.origin}/api/menu/${pathParts[pathParts.length - 1]}`,
+  `${url.origin}/api/data/${pathParts[pathParts.length - 1]}`,
+  `${url.origin}/v1/${pathParts.join('/')}`,
+  `${url.origin}/rest/${pathParts.join('/')}`
+];
+
+// Test each pattern with WebFetch
+for (const apiUrl of apiPatterns) {
+  // Test if endpoint exists and returns JSON
+}
+```
+
+**If none work**: Ask user for help (don't guess further).
+
+### Step 0.4: Analyze Type Indicators
 
 Look for these indicators:
 
