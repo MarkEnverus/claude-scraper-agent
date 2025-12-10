@@ -68,7 +68,98 @@ const apiCalls = resources.filter(r =>
 
 **If API endpoints discovered**: Test them with WebFetch to see if they return structured data.
 
-### Step 0.2: If Network Monitoring Finds Nothing - Ask User
+### Step 0.2: Extract Navigation/Menu Items from Page
+
+After navigating to the page, use Puppeteer to extract ALL navigation links and menu items that might represent datasets:
+
+```javascript
+mcp__puppeteer__evaluate(`
+  // Find all navigation links, menu items, dataset listings
+  const menuItems = [];
+
+  // Look for common navigation patterns
+  const selectors = [
+    'nav a', '.nav a', '.menu a',
+    '.sidebar a', '[role="navigation"] a',
+    '.dataset-list a', '.file-list a',
+    'ul li a', '.item a', '.list-group-item'
+  ];
+
+  for (const selector of selectors) {
+    const elements = document.querySelectorAll(selector);
+    for (const el of elements) {
+      const href = el.href;
+      const text = el.textContent.trim();
+      if (text.length > 0 && href) {
+        menuItems.push({
+          text: text,
+          href: href,
+          slug: href.split('/').filter(p => p).pop()
+        });
+      }
+    }
+  }
+
+  // Remove duplicates
+  const uniqueItems = [...new Map(menuItems.map(item => [item.href, item])).values()];
+
+  return {
+    totalMenuItems: uniqueItems.length,
+    menuItems: uniqueItems.slice(0, 50) // Limit to first 50 to avoid overwhelming output
+  };
+`)
+```
+
+**If menu items found**: Check if they correspond to datasets/data sources.
+
+### Step 0.3: Parse Menu API for Complete Dataset List
+
+If network monitoring found a menu/navigation API (e.g., `/api/menu/`, `/api/navigation/`), fetch it to get ALL available datasets:
+
+```bash
+# Example: Parse menu API response
+curl -s "https://example.com/api/menu/{group-slug}" | \
+  python3 -c "import sys, json; \
+  data = json.load(sys.stdin); \
+  datasets = data.get('childList', data.get('children', data.get('items', []))); \
+  print(f'Found {len(datasets)} datasets'); \
+  for ds in datasets: \
+    slug = ds.get('slug', ds.get('id', ds.get('name', ''))); \
+    name = ds.get('name', ds.get('title', slug)); \
+    print(f'  - {name} ({slug})')"
+```
+
+**Critical**: Parse the JSON structure to extract:
+- Dataset slugs/IDs
+- Dataset names/titles
+- Dataset descriptions
+- Dataset types (if available)
+
+Save all discovered dataset slugs for testing in Step 0.4.
+
+### Step 0.4: Test Each Discovered Dataset
+
+For EACH dataset found via menu extraction or menu API, test if it has actual data available:
+
+```bash
+# Test each slug with common patterns
+for slug in discovered_dataset_slugs:
+  # Try file-browser-api pattern
+  curl -s "https://example.com/file-browser-api/list/${slug}?path=/" | head -20
+
+  # Try direct API pattern
+  curl -s "https://example.com/api/data/${slug}" | head -20
+
+  # Try marketplace pattern
+  curl -s "https://example.com/marketplace/${slug}" | head -20
+done
+```
+
+Document ALL datasets that return valid responses (HTTP 200 + meaningful data).
+
+**Important**: Do not just test 2-3 datasets and stop. Test ALL discovered datasets to ensure complete documentation.
+
+### Step 0.5: If Network Monitoring Finds Nothing - Ask User
 
 If Puppeteer doesn't discover any API calls, **STOP and ask the user for help** using AskUserQuestion:
 
@@ -123,9 +214,9 @@ If you don't see any API requests:
 
 Then use AskUserQuestion to get the curl command or confirmation of no API.
 
-### Step 0.3: Fallback - Try Common API Patterns
+### Step 0.6: Fallback - Try Common API Patterns
 
-Only after monitoring network traffic, try inferring API endpoints from the URL structure:
+Only after monitoring network traffic AND menu extraction, try inferring API endpoints from the URL structure:
 
 ```javascript
 // Extract base domain and path components
@@ -149,7 +240,7 @@ for (const apiUrl of apiPatterns) {
 
 **If none work**: Ask user for help (don't guess further).
 
-### Step 0.4: Analyze Type Indicators
+### Step 0.7: Analyze Type Indicators
 
 Look for these indicators:
 
@@ -180,7 +271,7 @@ Look for these indicators:
 - IMAP/SMTP configuration
 - Email addresses for data requests
 
-### Step 0.3: Save Detection Results
+### Step 0.8: Save Detection Results
 
 **You MUST write this file:**
 
