@@ -1155,7 +1155,14 @@ if (pagination || dynamic_content_loading) {
 
 #### Step 3.5: Save Final Validated Specification
 
-**You MUST write this file:**
+**CRITICAL:** Save ALL files to the project directory in `datasource_analysis/`, NOT to a temp directory. Files must be preserved for scraper generators.
+
+**MANDATORY REQUIREMENTS:**
+1. **Enumerate EVERY endpoint/dataset discovered** - no samples, ALL of them
+2. **Provide detailed spec for EACH endpoint** - URL, parameters, format, authentication
+3. **Include executive summary** - total counts, success/failure rates, endpoint status overview
+
+**You MUST write this file to `datasource_analysis/validated_datasource_spec.json`:**
 
 ```json
 {
@@ -1164,18 +1171,32 @@ if (pagination || dynamic_content_loading) {
   "timestamp": "2025-01-20T14:30:00Z",
   "url": "https://portal.spp.org/groups/real-time-balancing-market",
 
+  "executive_summary": {
+    "total_endpoints_discovered": 47,
+    "total_datasets": 23,
+    "total_files": 156,
+    "accessible_endpoints": 42,
+    "protected_endpoints": 5,
+    "broken_endpoints": 0,
+    "success_rate": "89%",
+    "primary_formats": ["CSV", "JSON", "XML"],
+    "authentication_required": false,
+    "estimated_scraper_complexity": "low"
+  },
+
   "validation_summary": {
     "phase0_detected_type": "website_portal",
     "phase1_extraction_quality": "comprehensive",
-    "phase2_test_results": "3/5 links accessible",
-    "confidence_score": 0.75,
+    "phase2_test_results": "42/47 endpoints accessible",
+    "confidence_score": 0.92,
     "confidence_level": "high",
-    "discrepancies_found": 2
+    "discrepancies_found": 1
   },
 
   "data_catalog": {
-    "total_files_discovered": 15,
-    "file_formats": ["csv", "json", "xml", "xlsx"],
+    "total_files_discovered": 156,
+    "total_endpoints": 47,
+    "file_formats": {"csv": 89, "json": 34, "xml": 21, "xlsx": 12},
     "data_categories": [
       "Real-Time Market Data",
       "Historical Load Forecasts",
@@ -1217,6 +1238,75 @@ if (pagination || dynamic_content_loading) {
     "rate_limits": "not_observed",
     "cost": "free"
   },
+
+  "endpoints": [
+    {
+      "endpoint_id": "rtm-lmp-data",
+      "name": "Real-Time Market LMP Data",
+      "type": "file-browser-api",
+      "base_url": "https://portal.spp.org/file-browser-api",
+      "path": "/list/real-time-balancing-market",
+      "method": "GET",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Folder path (e.g., '/' for root)",
+          "example": "/"
+        }
+      },
+      "authentication": {
+        "required": false,
+        "method": "none"
+      },
+      "response_format": "json",
+      "data_structure": {
+        "type": "array",
+        "items": {
+          "name": "string",
+          "path": "string",
+          "type": "file|folder",
+          "size": "integer",
+          "modified": "datetime"
+        }
+      },
+      "sample_files": [
+        {"name": "rtm_lmp_20250120.csv", "size": 15728640, "format": "csv"},
+        {"name": "rtm_lmp_20250119.csv", "size": 14932000, "format": "csv"}
+      ],
+      "validation_status": "tested_200_ok",
+      "accessible": true,
+      "last_tested": "2025-01-20T14:30:00Z",
+      "file_count": 156,
+      "update_frequency": "hourly",
+      "notes": "Complete file hierarchy, no authentication required"
+    },
+    {
+      "endpoint_id": "download-endpoint",
+      "name": "File Download Endpoint",
+      "type": "file-browser-api",
+      "base_url": "https://portal.spp.org/file-browser-api",
+      "path": "/download/real-time-balancing-market",
+      "method": "GET",
+      "parameters": {
+        "path": {
+          "type": "string",
+          "required": true,
+          "description": "Full file path from list endpoint",
+          "example": "/FolderName/file.csv"
+        }
+      },
+      "authentication": {
+        "required": false,
+        "method": "none"
+      },
+      "response_format": "binary",
+      "validation_status": "tested_200_ok",
+      "accessible": true,
+      "last_tested": "2025-01-20T14:30:00Z",
+      "notes": "Direct file download, supports all file types"
+    }
+  ],
 
   "scraper_recommendation": {
     "type": "website-parser" | "http-collector",
@@ -1277,8 +1367,13 @@ Save as `validated_datasource_spec.json`
 - ✅ ALWAYS calculate confidence score
 - ✅ ALWAYS provide scraper recommendation
 - ✅ ALWAYS catalog all downloadable files with accessibility status
+- ✅ **ENUMERATE EVERY ENDPOINT** - The "endpoints" array MUST list ALL discovered endpoints/datasets, NOT just 2-3 examples
+- ✅ **PROVIDE DETAILED SPECS** - Each endpoint needs: URL, parameters, authentication, response format, validation status
+- ✅ **INCLUDE EXECUTIVE SUMMARY** - Total counts, success rates, endpoint status overview
+- ✅ **SAVE TO PROJECT DIRECTORY** - Use `datasource_analysis/` NOT temp directory
 - ❌ NEVER ignore broken/inaccessible links
 - ❌ NEVER assume all links work if some failed in testing
+- ❌ NEVER provide just 2-3 sample endpoints when dozens were discovered
 - ✅ Document BOTH accessible and inaccessible files
 
 ---
