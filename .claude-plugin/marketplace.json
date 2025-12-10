@@ -11,7 +11,7 @@
     {
       "name": "scraper-dev",
       "description": "Automated scraper generation for data collection pipelines with support for HTTP/REST APIs, website parsing, FTP/SFTP, and email attachments. Generates type-safe, mypy and ruff compliant code with automatic quality checking. Features tabbed question interface for better UX. Includes version tracking, scraper maintenance tools (/fix-scraper, /update-scraper), self-contained Kafka notification support, and optional config file pre-configuration.",
-      "version": "1.4.2",
+      "version": "1.4.9",
       "author": {
         "name": "Mark Johnson",
         "email": "mark.johnson@example.com"

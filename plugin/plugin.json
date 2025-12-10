@@ -2,7 +2,10 @@
   "name": "scraper-dev",
   "version": "1.4.9",
   "description": "Automated scraper generation and data source analysis for any data collection pipeline. Includes enhanced business analyst for APIs, FTP, websites, and email sources, scraper generators for HTTP/FTP/Email/Website, code quality checks, and maintenance tools",
-  "author": "Claude Scraper Agent",
+  "author": {
+    "name": "Mark Johnson",
+    "email": "mark.johnson@example.com"
+  },
   "agents": [
     {
       "name": "scraper-generator",
