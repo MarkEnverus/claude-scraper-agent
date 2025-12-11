@@ -65,14 +65,115 @@ Create realistic sample API response based on data format.
 
 **Location:** `sourcing/scraping/{source}/README.md`
 
-Include:
-- Overview
-- Data source details
-- Usage examples
-- Environment variables
-- S3 storage pattern
-- Redis key pattern
-- Testing instructions
+**CRITICAL:** Use the standardized README template from `${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md`
+
+#### Step 1: Read Template
+```bash
+Read("${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md")
+```
+
+#### Step 2: Replace All Placeholders
+
+**Required Substitutions:**
+- `{SOURCE}` → User's data source name (e.g., "MISO", "NYISO")
+- `{DATA_TYPE}` → User's data type (e.g., "load_forecast", "price_actual")
+- `{SCRAPER_VERSION}` → Current plugin version (e.g., "1.6.0")
+- `{INFRASTRUCTURE_VERSION}` → Current infrastructure version (e.g., "1.6.0")
+- `{GENERATED_DATE}` → Current date in YYYY-MM-DD format
+- `{COLLECTION_METHOD}` → "HTTP/REST API"
+- `{UPDATE_FREQUENCY}` → User-specified frequency (e.g., "Hourly", "Daily")
+- `{HISTORICAL_SUPPORT}` → "Yes" or "No" based on user input
+- `{AUTH_METHOD}` → User's auth method (e.g., "API Key", "OAuth 2.0", "None")
+- `{DATA_FORMAT}` → User-specified format (e.g., "JSON", "XML", "CSV")
+- `{BASE_URL}` → API base URL from user
+- `{SOURCE_UPPER}` → Source name in UPPERCASE (e.g., "MISO", "NYISO")
+- `{SOURCE_LOWER}` → Source name in lowercase (e.g., "miso", "nyiso")
+- `{DATA_TYPE_LOWER}` → Data type in lowercase (e.g., "load_forecast")
+- `{SCRAPER_FILENAME}` → Generated scraper filename (e.g., "scraper_miso_load_http.py")
+- `{CLASS_NAME}` → Generated class name (e.g., "MisoLoadCollector")
+- `{S3_BUCKET}` → Default S3 bucket name or "your-bucket"
+- `{S3_PREFIX}` → Default S3 prefix or "raw-data"
+- `{FILE_EXTENSION}` → File extension based on format (e.g., "json", "xml", "csv")
+- `{OUTPUT_FORMAT}` → Output format, typically same as DATA_FORMAT
+
+**Collection-Method-Specific Substitutions:**
+
+`{COLLECTION_METHOD_DETAILS}`:
+```markdown
+### HTTP/REST API Configuration
+
+**Base URL:** {BASE_URL}
+**Endpoint:** {ENDPOINT_PATH}
+**HTTP Method:** GET
+**Query Parameters:** {QUERY_PARAMS}
+**Rate Limits:** {RATE_LIMIT}
+```
+
+`{AUTH_DESCRIPTION}`:
+- API Key: "Required for authentication"
+- OAuth 2.0: "OAuth token for authentication"
+- Basic Auth: "Username and password"
+- Certificate: "Client certificate for authentication"
+- None: "No authentication required"
+
+`{AUTH_CONFIGURATION_DETAILS}`:
+```markdown
+#### API Key Authentication
+
+Set your API key in environment variables:
+```bash
+export {SOURCE_UPPER}_API_KEY="your-api-key-here"
+```
+
+To obtain an API key:
+1. Register at {REGISTRATION_URL if provided}
+2. Navigate to API settings
+3. Generate new API key
+4. Copy and store securely
+```
+
+`{RATE_LIMIT_DETAILS}`:
+- If rate limit specified: "**Rate Limit:** {RATE_LIMIT}\n\nThe scraper includes automatic retry logic with exponential backoff."
+- If no rate limit: "**Rate Limit:** No known rate limits\n\nThe scraper will collect data as fast as the API responds."
+
+`{DATA_FORMAT_DETAILS}`:
+```markdown
+### Sample Response Structure
+
+```json
+{SAMPLE_RESPONSE_FROM_FIXTURE}
+```
+
+### Fields
+- **{field_name}**: {description}
+- **{field_name}**: {description}
+```
+
+`{FILENAME_PATTERN}`:
+- Based on data type and frequency
+- Example: `load_forecast_YYYYMMDD_HH.json` for hourly data
+- Example: `price_actual_YYYYMMDD.csv` for daily data
+
+#### Step 3: Write README
+
+```python
+Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+```
+
+#### Step 4: Verify README Created
+
+```python
+Read("sourcing/scraping/{source_lower}/README.md")
+```
+
+**README Generation Rules:**
+- ✅ ALWAYS use the standardized template
+- ✅ Replace ALL placeholders (no {PLACEHOLDER} text left)
+- ✅ Provide concrete examples, not generic instructions
+- ✅ Include actual values from user input
+- ✅ Make sure all bash commands are copy-paste ready
+- ❌ NEVER leave template placeholders in final README
+- ❌ NEVER skip sections from the template
 
 ## Code Template
 

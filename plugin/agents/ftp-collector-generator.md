@@ -32,7 +32,70 @@ Generate 4 files in the sourcing project:
 1. **Main Scraper** (`sourcing/scraping/{source}/scraper_{source}_{type}_ftp.py`)
 2. **Tests** (`sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_ftp.py`)
 3. **Test Fixtures** (`sourcing/scraping/{source}/tests/fixtures/sample_file.{ext}`)
-4. **README** (`sourcing/scraping/{source}/README.md`)
+4. **README** (`sourcing/scraping/{source}/README.md`) - **Use standardized template**
+
+## README Generation
+
+**CRITICAL:** Use the standardized README template from `${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md`
+
+### Step 1: Read Template
+```bash
+Read("${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md")
+```
+
+### Step 2: Replace Placeholders
+
+Use the same substitution list as HTTP collector, with these FTP/SFTP-specific values:
+
+- `{COLLECTION_METHOD}` → "FTP/SFTP File Download"
+- `{COLLECTION_METHOD_DETAILS}`:
+```markdown
+### FTP/SFTP Configuration
+
+**Server:** {FTP_HOST}:{FTP_PORT}
+**Protocol:** {FTP or SFTP}
+**Directory:** {DIRECTORY_PATH}
+**File Pattern:** {FILE_PATTERN}
+**Connection Mode:** {PASSIVE or ACTIVE}
+```
+
+- `{AUTH_DESCRIPTION}`:
+  - FTP: "FTP username and password for authentication"
+  - SFTP: "SSH key or password for SFTP authentication"
+
+- `{AUTH_CONFIGURATION_DETAILS}`:
+```markdown
+#### FTP/SFTP Authentication
+
+Set your credentials in environment variables:
+```bash
+export {SOURCE_UPPER}_FTP_HOST="{FTP_HOST}"
+export {SOURCE_UPPER}_FTP_PORT="{FTP_PORT}"
+export {SOURCE_UPPER}_FTP_USERNAME="your-username"
+export {SOURCE_UPPER}_FTP_PASSWORD="your-password"
+# For SFTP with SSH key:
+export {SOURCE_UPPER}_SSH_KEY_PATH="/path/to/private/key"
+```
+
+**Security Note:** Store credentials securely. Never commit credentials to version control.
+```
+
+- `{RATE_LIMIT_DETAILS}`:
+```markdown
+**FTP Etiquette:** The scraper maintains a single connection per session to minimize server load.
+
+**Connection Management:** Connections are opened, used, and properly closed after each collection run.
+```
+
+### Step 3: Write README
+```python
+Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+```
+
+### Step 4: Verify
+```python
+Read("sourcing/scraping/{source_lower}/README.md")
+```
 
 ## Code Template
 

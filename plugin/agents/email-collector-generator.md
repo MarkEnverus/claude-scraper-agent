@@ -33,7 +33,74 @@ Generate 4 files in the sourcing project:
 1. **Main Scraper** (`sourcing/scraping/{source}/scraper_{source}_{type}_email.py`)
 2. **Tests** (`sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_email.py`)
 3. **Test Fixtures** (`sourcing/scraping/{source}/tests/fixtures/sample_attachment.{ext}`)
-4. **README** (`sourcing/scraping/{source}/README.md`)
+4. **README** (`sourcing/scraping/{source}/README.md`) - **Use standardized template**
+
+## README Generation
+
+**CRITICAL:** Use the standardized README template from `${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md`
+
+### Step 1: Read Template
+```bash
+Read("${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md")
+```
+
+### Step 2: Replace Placeholders
+
+Use the same substitution list as HTTP collector, with these Email-specific values:
+
+- `{COLLECTION_METHOD}` → "Email Attachments"
+- `{COLLECTION_METHOD_DETAILS}`:
+```markdown
+### Email Configuration
+
+**Server:** {EMAIL_SERVER}:{EMAIL_PORT}
+**Protocol:** {IMAP or POP3}
+**Mailbox:** {MAILBOX_NAME}
+**Subject Filter:** {SUBJECT_FILTER}
+**Sender Filter:** {SENDER_FILTER}
+**Attachment Pattern:** {ATTACHMENT_PATTERN}
+```
+
+- `{AUTH_DESCRIPTION}`:
+  - "Email account credentials for IMAP/POP3 access"
+
+- `{AUTH_CONFIGURATION_DETAILS}`:
+```markdown
+#### Email Authentication
+
+Set your email credentials in environment variables:
+```bash
+export {SOURCE_UPPER}_EMAIL_SERVER="{EMAIL_SERVER}"
+export {SOURCE_UPPER}_EMAIL_PORT="{EMAIL_PORT}"
+export {SOURCE_UPPER}_EMAIL_USERNAME="your-email@domain.com"
+export {SOURCE_UPPER}_EMAIL_PASSWORD="your-app-password"
+```
+
+**Security Notes:**
+- Use app-specific passwords (not your main account password)
+- For Gmail: Enable "Less secure app access" or use OAuth 2.0
+- For Office 365: Use app passwords with MFA enabled
+- Store credentials securely. Never commit credentials to version control.
+```
+
+- `{RATE_LIMIT_DETAILS}`:
+```markdown
+**Email Etiquette:** The scraper connects, retrieves messages, and disconnects cleanly.
+
+**Connection Management:** Single IMAP/POP3 session per run. Does not keep persistent connections.
+
+**Mailbox Organization:** Processed emails can be marked as read or moved to a folder to avoid reprocessing.
+```
+
+### Step 3: Write README
+```python
+Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+```
+
+### Step 4: Verify
+```python
+Read("sourcing/scraping/{source_lower}/README.md")
+```
 
 ## Code Template
 

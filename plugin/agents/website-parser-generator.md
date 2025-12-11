@@ -164,6 +164,53 @@ def _fetch_page_with_js(self, url: str) -> str:
         return content
 ```
 
+## README Generation
+
+**CRITICAL:** Use the standardized README template from `${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md`
+
+### Step 1: Read Template
+```bash
+Read("${CLAUDE_PLUGIN_ROOT}/infrastructure/README.template.md")
+```
+
+### Step 2: Replace Placeholders
+
+Use the same substitution list as HTTP collector, with these Website Parsing-specific values:
+
+- `{COLLECTION_METHOD}` → "Website Parsing"
+- `{COLLECTION_METHOD_DETAILS}`:
+```markdown
+### Website Parsing Configuration
+
+**Target URL:** {BASE_URL}
+**Link Selector:** {CSS_SELECTOR}
+**File Pattern:** {FILE_PATTERN}
+**JavaScript Rendering:** {JS_REQUIRED}
+**Pagination:** {PAGINATION_SUPPORTED}
+```
+
+- `{AUTH_CONFIGURATION_DETAILS}`:
+  - If no auth: "No authentication required for public website"
+  - If cookie-based: Instructions for cookie/session management
+  - If login required: Instructions for credentials
+
+- `{RATE_LIMIT_DETAILS}`:
+```markdown
+**Scraping Etiquette:** The scraper respects robots.txt and adds delays between requests.
+
+**Request Delay:** 1-2 seconds between page fetches to avoid overwhelming the server.
+```
+
+### Step 3: Write README
+```python
+Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+```
+
+### Step 4: Verify
+```python
+Read("sourcing/scraping/{source_lower}/README.md")
+```
+
 ## Generation Steps
 
 Same as HTTP collector but:
@@ -172,6 +219,7 @@ Same as HTTP collector but:
 3. Adjust `generate_candidates()` to parse HTML first
 4. Add Playwright if JavaScript required
 5. Update dependencies in test fixtures
+6. **Generate README using standardized template**
 
 ## Dependencies to Add
 
