@@ -731,6 +731,338 @@ Ask these follow-up questions based on the Collection Method selected:
 - Sender filter pattern (text input)
 - Attachment filename pattern (text input)
 
+## 🔍 Data Source Validation (CRITICAL)
+
+**IMPORTANT**: Before routing to specialist agents, validate that the user's request is for a SINGLE data source only.
+
+### Rule: One Scraper Per Data Source
+
+Each scraper should collect data from **exactly one data source**. If the user's request involves multiple data sources, you MUST prompt them to clarify which one they want to create first.
+
+### Detection Criteria for Multiple Data Sources
+
+Check the user's gathered information for these red flags:
+
+**Red Flag 1: Multiple Source Names**
+```python
+# Example problematic inputs:
+data_source = "MISO and SPP"  # ❌ Two sources
+data_source = "MISO, ERCOT, CAISO"  # ❌ Three sources
+data_source = "All ISOs"  # ❌ Multiple sources
+```
+
+**Red Flag 2: Multiple API Base URLs**
+```python
+# Example problematic inputs:
+api_base_url = "https://api.miso.com/v1 and https://api.spp.org/v1"  # ❌ Two APIs
+api_base_url = "Multiple endpoints for different sources"  # ❌ Unclear
+```
+
+**Red Flag 3: Multiple Website URLs**
+```python
+# Example problematic inputs:
+website_url = "https://miso.org and https://spp.org"  # ❌ Two sites
+website_url = "Various ISO portals"  # ❌ Multiple sources
+```
+
+**Red Flag 4: Data Source Name Contains "and", "or", "multiple", etc.**
+```python
+problematic_keywords = ["and", "or", "multiple", "all", "various", "several", ","]
+
+if any(keyword in data_source.lower() for keyword in problematic_keywords):
+    # Potential multiple sources detected
+    flag_for_validation()
+```
+
+### Validation Logic
+
+After gathering all information from the user, run this validation:
+
+```python
+def validate_single_data_source(user_inputs):
+    """
+    Validate that user's request is for a single data source only.
+    Returns: (is_valid, issues_found)
+    """
+    issues = []
+
+    # Check 1: Data source name
+    data_source = user_inputs["data_source"]
+    if any(keyword in data_source.lower() for keyword in ["and", "or", "multiple", "all", "various", "several"]):
+        issues.append({
+            "field": "data_source",
+            "value": data_source,
+            "issue": "Data source name suggests multiple sources",
+            "example": "Contains 'and' or 'or' keyword"
+        })
+
+    # Check 2: Multiple commas in source name (e.g., "MISO, SPP, ERCOT")
+    if data_source.count(",") >= 1:
+        issues.append({
+            "field": "data_source",
+            "value": data_source,
+            "issue": "Multiple sources detected (comma-separated)",
+            "example": "Appears to list multiple source names"
+        })
+
+    # Check 3: API base URL (if HTTP collection method)
+    if user_inputs["collection_method"] == "HTTP/REST API":
+        api_base_url = user_inputs["api_base_url"]
+        if " and " in api_base_url or " or " in api_base_url:
+            issues.append({
+                "field": "api_base_url",
+                "value": api_base_url,
+                "issue": "Multiple API URLs detected",
+                "example": "Contains 'and' or 'or' between URLs"
+            })
+
+    # Check 4: Website URL (if Website Parsing method)
+    if user_inputs["collection_method"] == "Website Parsing":
+        website_url = user_inputs["website_url_pattern"]
+        if " and " in website_url or " or " in website_url:
+            issues.append({
+                "field": "website_url_pattern",
+                "value": website_url,
+                "issue": "Multiple website URLs detected",
+                "example": "Contains 'and' or 'or' between URLs"
+            })
+
+    # Check 5: Data type suggests multiple datasets
+    data_type = user_inputs["data_type"]
+    if any(keyword in data_type.lower() for keyword in ["all", "multiple", "various"]):
+        issues.append({
+            "field": "data_type",
+            "value": data_type,
+            "issue": "Data type suggests multiple datasets",
+            "example": "Use specific dataset name instead"
+        })
+
+    return len(issues) == 0, issues
+```
+
+### If Validation Fails: Prompt User
+
+When multiple data sources are detected, use AskUserQuestion to clarify:
+
+```python
+if not is_valid:
+    # Show issues found
+    print("⚠️ Multiple Data Sources Detected")
+    print()
+    print("I detected that your request may involve multiple data sources:")
+    for issue in issues_found:
+        print(f"  - {issue['field']}: {issue['value']}")
+        print(f"    Issue: {issue['issue']}")
+    print()
+    print("Each scraper should collect from exactly ONE data source.")
+
+    # Prompt user to clarify
+    AskUserQuestion({
+        "questions": [
+            {
+                "question": "It appears you want to collect from multiple sources. Which ONE data source should I create the scraper for?",
+                "header": "Clarify",
+                "multiSelect": false,
+                "options": [
+                    {
+                        "label": "I want ONE scraper for ONE source",
+                        "description": "I'll tell you which specific source to use"
+                    },
+                    {
+                        "label": "I want MULTIPLE scrapers (one per source)",
+                        "description": "I understand I need to create them one at a time"
+                    },
+                    {
+                        "label": "I'm not sure what you mean",
+                        "description": "Please explain the one-scraper-per-source rule"
+                    }
+                ]
+            }
+        ]
+    })
+
+    # Handle response
+    if response == "I want ONE scraper for ONE source":
+        # Re-ask for specific data source name
+        AskUserQuestion({
+            "questions": [
+                {
+                    "question": "Which single data source should this scraper collect from?",
+                    "header": "Data Source",
+                    "multiSelect": false,
+                    "options": [
+                        {
+                            "label": "Enter single source name",
+                            "description": "e.g., 'MISO' or 'SPP' (not both)"
+                        }
+                    ]
+                }
+            ]
+        })
+
+    elif response == "I want MULTIPLE scrapers (one per source)":
+        print("✅ Understood! I'll help you create scrapers one at a time.")
+        print()
+        print("Let's start with the first one. Which data source should I create first?")
+
+        AskUserQuestion({
+            "questions": [
+                {
+                    "question": "Which data source should I create the FIRST scraper for?",
+                    "header": "First Source",
+                    "multiSelect": false,
+                    "options": [
+                        {
+                            "label": "Enter first source name",
+                            "description": "I'll create scrapers for other sources after this one"
+                        }
+                    ]
+                }
+            ]
+        })
+
+    elif response == "I'm not sure what you mean":
+        print("📚 One Scraper Per Data Source - Explanation")
+        print()
+        print("**The Rule:**")
+        print("Each scraper file should collect data from exactly ONE data source.")
+        print()
+        print("**Why?**")
+        print("  - Maintainability: Easy to update one source without affecting others")
+        print("  - Debugging: Clear separation of concerns")
+        print("  - Monitoring: Track success/failure per source independently")
+        print("  - Reusability: Each scraper can run on its own schedule")
+        print()
+        print("**Examples:**")
+        print("  ✅ GOOD: scraper_miso_load_http.py (one source: MISO)")
+        print("  ✅ GOOD: scraper_spp_price_http.py (one source: SPP)")
+        print("  ❌ BAD: scraper_miso_and_spp_load_http.py (two sources)")
+        print()
+        print("**What to do:**")
+        print("  If you need to collect from multiple sources (MISO, SPP, ERCOT):")
+        print("    1. Create scraper for MISO first")
+        print("    2. Then create separate scraper for SPP")
+        print("    3. Then create separate scraper for ERCOT")
+        print()
+        print("Now, which SINGLE data source should I create the scraper for?")
+
+        AskUserQuestion({
+            "questions": [
+                {
+                    "question": "Which single data source should this scraper collect from?",
+                    "header": "Data Source",
+                    "multiSelect": false,
+                    "options": [
+                        {
+                            "label": "Enter single source name",
+                            "description": "e.g., 'MISO', 'SPP', 'ERCOT' (pick ONE)"
+                        }
+                    ]
+                }
+            ]
+        })
+```
+
+### Example Validation Scenarios
+
+#### Scenario 1: Clear Single Source (PASS)
+```python
+user_inputs = {
+    "data_source": "MISO",
+    "data_type": "load_forecast",
+    "collection_method": "HTTP/REST API",
+    "api_base_url": "https://api.misoenergy.org/v1"
+}
+
+validate_single_data_source(user_inputs)
+# Returns: (True, [])
+# ✅ Proceed with scraper generation
+```
+
+#### Scenario 2: Multiple Sources Detected (FAIL)
+```python
+user_inputs = {
+    "data_source": "MISO and SPP",  # ❌ Problem here
+    "data_type": "load_forecast",
+    "collection_method": "HTTP/REST API",
+    "api_base_url": "https://api.misoenergy.org/v1 and https://api.spp.org/v1"  # ❌ And here
+}
+
+validate_single_data_source(user_inputs)
+# Returns: (False, [
+#   {"field": "data_source", "issue": "Contains 'and' keyword"},
+#   {"field": "api_base_url", "issue": "Multiple API URLs detected"}
+# ])
+# ⚠️ Prompt user for clarification
+```
+
+#### Scenario 3: Ambiguous Source Name (FAIL)
+```python
+user_inputs = {
+    "data_source": "All ISOs",  # ❌ Problem here
+    "data_type": "load_data",
+    "collection_method": "Website Parsing"
+}
+
+validate_single_data_source(user_inputs)
+# Returns: (False, [
+#   {"field": "data_source", "issue": "Contains 'all' keyword"}
+# ])
+# ⚠️ Prompt user for clarification
+```
+
+### Validation Placement in Workflow
+
+**When to run validation:**
+
+```python
+# After Batch 1-2 questions (7 questions)
+# After collection-specific follow-ups (Batch 3)
+# BEFORE routing to specialist agents
+
+gathered_info = {
+    "data_source": ...,
+    "data_type": ...,
+    "collection_method": ...,
+    "api_base_url": ...,  # if HTTP
+    # ... all other gathered fields
+}
+
+# RUN VALIDATION HERE
+is_valid, issues = validate_single_data_source(gathered_info)
+
+if not is_valid:
+    # Prompt user for clarification
+    # Re-gather corrected information
+    # Re-validate until valid
+    while not is_valid:
+        prompt_user_for_clarification(issues)
+        gather_corrected_info()
+        is_valid, issues = validate_single_data_source(gathered_info)
+
+# Only proceed when valid
+if is_valid:
+    route_to_specialist_agent(gathered_info)
+```
+
+### Summary Message After Validation
+
+When validation passes, confirm with user:
+
+```
+✅ Validation Complete
+
+Creating scraper for:
+  Source: {data_source} (single source ✅)
+  Data Type: {data_type}
+  Method: {collection_method}
+
+This scraper will collect ONLY from {data_source}.
+If you need to collect from other sources, I'll help you create additional scrapers after this one completes.
+
+Proceeding with generation...
+```
+
 ## Routing Logic
 
 Based on collection method:
