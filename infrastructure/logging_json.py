@@ -17,7 +17,6 @@ Example:
 import logging
 import json
 from datetime import datetime, UTC
-from typing import Any, Dict
 
 
 class JsonFormatter(logging.Formatter):

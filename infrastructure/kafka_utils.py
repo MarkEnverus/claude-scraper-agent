@@ -25,7 +25,7 @@ import json
 import os
 import logging
 from urllib.parse import urlparse, parse_qs
-from typing import Dict, Any, Optional, Callable
+from typing import Dict, Any, Optional
 
 from pydantic import BaseModel, Field, ConfigDict
 
@@ -78,6 +78,11 @@ class KafkaConfiguration:
                 )
 
             # Validate hostname to prevent SSRF
+            if not parsed.hostname:
+                raise ValueError("Hostname is required in connection string")
+            if not parsed.port:
+                raise ValueError("Port is required in connection string")
+
             self._validate_hostname(parsed.hostname)
 
             # Server configuration

@@ -6,7 +6,7 @@ Tests KafkaConfiguration, KafkaProducer, and ScraperNotificationMessage classes.
 import json
 import os
 import pytest
-from unittest.mock import Mock, patch, MagicMock, mock_open
+from unittest.mock import Mock, patch, mock_open
 from pathlib import Path
 
 # Import the classes we're testing
@@ -189,7 +189,7 @@ class TestKafkaConfiguration:
         """Test that empty topic name is rejected during validation."""
         # This should be caught by the existing check before validation
         # but testing the validation method's behavior
-        conn_str = f"kafka://kafka.example.com:9092/"
+        conn_str = "kafka://kafka.example.com:9092/"
         with pytest.raises(ValueError, match="Topic is required"):
             KafkaConfiguration(conn_str)
 
