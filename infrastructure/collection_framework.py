@@ -19,7 +19,7 @@ Example:
 """
 
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, TypedDict
+from typing import List, Dict, Any, Optional, TypedDict, Tuple, cast
 from dataclasses import dataclass
 from datetime import datetime, date, UTC
 # Note: Files are stored in original format (not gzipped) to preserve original file integrity
@@ -27,10 +27,9 @@ import hashlib
 import logging
 import re
 
-import boto3
-
 from sourcing.scraping.commons.hash_registry import HashRegistry
 from sourcing.exceptions import ScrapingError
+from sourcing.scraping.commons.s3_utils import S3Configuration, S3Uploader
 
 logger = logging.getLogger("sourcing_app")
 
@@ -137,33 +136,19 @@ class BaseCollector(ABC):
                 "Only lowercase letters, numbers, and underscores allowed."
             )
 
-        # Validate S3 bucket name
-        if not s3_bucket:
-            raise ValueError("s3_bucket cannot be empty")
+        # Initialize S3 configuration and uploader
+        try:
+            s3_config = S3Configuration(s3_bucket, s3_prefix)
+            self.s3_uploader = S3Uploader(s3_config)
+        except ValueError as e:
+            raise ValueError(f"Invalid S3 configuration: {e}") from e
 
-        if not re.match(r'^[a-z0-9\-\.]+$', s3_bucket):
-            raise ValueError(
-                f"Invalid S3 bucket name '{s3_bucket}'. "
-                "Only lowercase letters, numbers, hyphens, and dots allowed."
-            )
+        # Keep references for backwards compatibility
+        self.s3_bucket = s3_config.bucket
+        self.s3_prefix = s3_config.prefix
 
-        # Validate S3 prefix (no path traversal)
-        if '..' in s3_prefix or s3_prefix.startswith('/'):
-            raise ValueError(f"Path traversal detected in s3_prefix: {s3_prefix}")
-
-        if s3_prefix and not re.match(r'^[a-z0-9_\-\/]*$', s3_prefix):
-            raise ValueError(
-                f"Invalid characters in s3_prefix '{s3_prefix}'. "
-                "Only lowercase letters, numbers, underscores, hyphens, and slashes allowed."
-            )
-
-        # Normalize prefix (remove leading/trailing slashes)
-        self.s3_prefix = s3_prefix.strip('/')
-
-        self.s3_bucket = s3_bucket
         self.environment = environment
         self.hash_registry = HashRegistry(redis_client, environment, hash_ttl_days)
-        self.s3_client = boto3.client("s3")
         self.kafka_connection_string = kafka_connection_string
 
     @abstractmethod
@@ -243,31 +228,11 @@ class BaseCollector(ABC):
         """
         return len(content) > 0
 
-    def _validate_s3_path_component(self, component: str, name: str) -> None:
-        """Validate S3 path component for safety.
-
-        Args:
-            component: The path component to validate
-            name: Name of component for error messages
-
-        Raises:
-            ValueError: If component contains path traversal or invalid chars
-        """
-        import re
-
-        if not component:
-            raise ValueError(f"{name} cannot be empty")
-
-        # Check for path traversal
-        if '..' in component or component.startswith('/'):
-            raise ValueError(f"Path traversal detected in {name}: {component}")
-
-        # Check for invalid characters (allow alphanumeric, underscore, hyphen, dot)
-        if not re.match(r'^[a-zA-Z0-9_\-\.]+$', component):
-            raise ValueError(f"Invalid characters in {name}: {component}")
-
     def _build_s3_path(self, candidate: DownloadCandidate) -> str:
         """Build S3 path with date partitioning.
+
+        DEPRECATED: This method is deprecated and will be removed in v2.0.
+        Path building now handled by S3Uploader.upload().
 
         Format: s3://{bucket}/{prefix}/{dgroup}/year={YYYY}/month={MM}/day={DD}/{filename}
 
@@ -275,15 +240,19 @@ class BaseCollector(ABC):
             candidate: Candidate with file_date
 
         Returns:
-            Full S3 path
+            Full S3 path (legacy format)
 
         Example:
             >>> path = self._build_s3_path(candidate)
             >>> # s3://bucket/sourcing/nyiso_load/year=2025/month=01/day=20/load_20250120_14.json
         """
-        # Validate path components for security
-        self._validate_s3_path_component(self.dgroup, "dgroup")
-        self._validate_s3_path_component(candidate.identifier, "identifier")
+        import warnings
+        warnings.warn(
+            "_build_s3_path is deprecated and will be removed in v2.0. "
+            "Use S3Uploader.upload() instead.",
+            DeprecationWarning,
+            stacklevel=2
+        )
 
         year = candidate.file_date.year
         month = f"{candidate.file_date.month:02d}"
@@ -297,48 +266,35 @@ class BaseCollector(ABC):
             f"year={year}/month={month}/day={day}/{filename}"
         )
 
-    def _upload_to_s3(self, content: bytes, s3_path: str) -> tuple[str, str]:
-        """Upload content to S3 in original format (uncompressed).
+    def _upload_to_s3(
+        self,
+        content: bytes,
+        candidate: DownloadCandidate,
+        version: str
+    ) -> Tuple[str, str, str]:
+        """Upload content to S3 with versioning.
 
         Args:
             content: Raw content bytes
-            s3_path: Full S3 path (s3://bucket/key)
+            candidate: Download candidate with filename and file_date
+            version: Version timestamp (format: YYYYMMDDHHMMSSZ)
 
         Returns:
-            Tuple of (version_id, etag)
+            Tuple of (s3_path, version, etag)
 
         Raises:
             ScrapingError: If upload fails
         """
         try:
-            # Parse S3 path
-            path_parts = s3_path.replace("s3://", "").split("/", 1)
-            bucket = path_parts[0]
-            key = path_parts[1]
-
-            logger.debug(
-                "Uploading to S3",
-                extra={
-                    "bucket": bucket,
-                    "key": key,
-                    "size": len(content)
-                }
+            result = self.s3_uploader.upload(
+                content=content,
+                filename=candidate.identifier,
+                file_date=candidate.file_date,
+                version=version
             )
-
-            # Upload to S3 in original format
-            response = self.s3_client.put_object(
-                Bucket=bucket,
-                Key=key,
-                Body=content
-            )
-
-            version_id = response.get("VersionId", "")
-            etag = response.get("ETag", "").strip('"')
-
-            return version_id, etag
-
+            return cast(Tuple[str, str, str], result)
         except Exception as e:
-            raise ScrapingError(f"Failed to upload to S3 {s3_path}: {e}") from e
+            raise ScrapingError(f"Failed to upload to S3: {e}") from e
 
     def _publish_kafka_notification(
         self,
@@ -346,7 +302,8 @@ class BaseCollector(ABC):
         s3_path: str,
         content_hash: str,
         original_size: int,
-        etag: str
+        etag: str,
+        version: str
     ):
         """Publish notification to Kafka.
 
@@ -358,6 +315,7 @@ class BaseCollector(ABC):
             content_hash: SHA256 hash of content
             original_size: Original file size in bytes
             etag: S3 ETag
+            version: Version timestamp (format: YYYYMMDDHHMMSSZ)
         """
         if not self.kafka_connection_string:
             logger.debug("Kafka connection not configured, skipping notification")
@@ -379,7 +337,7 @@ class BaseCollector(ABC):
                 environment=self.environment,
                 urn=candidate.identifier,
                 location=s3_path,
-                version=datetime.now(UTC).strftime("%Y%m%dT%H%M%SZ"),
+                version=version,  # Use version from S3 upload
                 etag=etag,
                 metadata={
                     "publish_dtm": datetime.now(UTC).isoformat().replace('+00:00', 'Z'),
@@ -414,6 +372,7 @@ class BaseCollector(ABC):
 
     def run_collection(
         self,
+        version: str,
         force: bool = False,
         skip_hash_check: bool = False,
         **candidate_params
@@ -426,11 +385,12 @@ class BaseCollector(ABC):
            - Collect content
            - Validate content
            - Check hash deduplication (unless skip_hash_check)
-           - Upload to S3
+           - Upload to S3 with version
            - Publish Kafka notification
            - Register hash in Redis
 
         Args:
+            version: Version timestamp (format: YYYYMMDDHHMMSSZ)
             force: Force re-download even if hash exists
             skip_hash_check: Skip hash checking entirely (for testing)
             **candidate_params: Parameters passed to generate_candidates()
@@ -447,6 +407,7 @@ class BaseCollector(ABC):
 
         Example:
             >>> results = collector.run_collection(
+            ...     version="20251215113400Z",
             ...     start_date=datetime(2025, 1, 20),
             ...     end_date=datetime(2025, 1, 21),
             ...     force=False
@@ -521,15 +482,14 @@ class BaseCollector(ABC):
                         results["skipped_duplicate"] += 1
                         continue
 
-                # Build S3 path
-                s3_path = self._build_s3_path(candidate)
-
-                # Store in S3
-                version_id, etag = self._upload_to_s3(content, s3_path)
+                # Store in S3 with version
+                s3_path, version_returned, etag = self._upload_to_s3(
+                    content, candidate, version
+                )
 
                 # Publish Kafka notification
                 self._publish_kafka_notification(
-                    candidate, s3_path, content_hash, len(content), etag
+                    candidate, s3_path, content_hash, len(content), etag, version
                 )
 
                 # Register hash
@@ -539,7 +499,7 @@ class BaseCollector(ABC):
                     s3_path,
                     {
                         **candidate.metadata,
-                        "version_id": version_id,
+                        "version": version,
                         "etag": etag
                     }
                 )
