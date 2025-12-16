@@ -189,6 +189,12 @@ def main(
 ) -> None:
     """Collect {SOURCE} {DATA_TYPE} data via website parsing."""
 
+    # Default dates to today if not provided
+    if start_date is None:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if end_date is None:
+        end_date = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
+
     # Validate version format
     from sourcing.scraping.commons.s3_utils import validate_version_format
     if not validate_version_format(version):
