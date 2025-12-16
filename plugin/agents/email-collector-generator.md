@@ -30,10 +30,12 @@ You will receive structured data about:
 
 Generate 4 files in the sourcing project:
 
-1. **Main Scraper** (`sourcing/scraping/{source}/scraper_{source}_{type}_email.py`)
-2. **Tests** (`sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_email.py`)
-3. **Test Fixtures** (`sourcing/scraping/{source}/tests/fixtures/sample_attachment.{ext}`)
-4. **README** (`sourcing/scraping/{source}/README.md`) - **Use standardized template**
+1. **Main Scraper** (`sourcing/scraping/{source}/{dataset_name}/__main__.py`)
+2. **Tests** (`sourcing/scraping/{source}/{dataset_name}/tests/test_scraper.py`)
+3. **Test Fixtures** (`sourcing/scraping/{source}/{dataset_name}/tests/fixtures/sample_attachment.{ext}`)
+4. **README** (`sourcing/scraping/{source}/{dataset_name}/README.md`) - **Use standardized template**
+
+**Note:** Using `__main__.py` follows Python convention and allows clean execution via `python -m sourcing.scraping.{source}.{dataset_name}`
 
 ## README Generation
 
@@ -94,12 +96,12 @@ export {SOURCE_UPPER}_EMAIL_PASSWORD="your-app-password"
 
 ### Step 3: Write README
 ```python
-Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+Write("sourcing/scraping/{source_lower}/{dataset_name}/README.md", readme_content)
 ```
 
 ### Step 4: Verify
 ```python
-Read("sourcing/scraping/{source_lower}/README.md")
+Read("sourcing/scraping/{source_lower}/{dataset_name}/README.md")
 ```
 
 ## Code Template
@@ -397,27 +399,26 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         return content
 
     def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
-        """
-        Validate attachment content.
+        """Validate that we got a proper attachment (not an error or garbage).
 
-        Args:
-            content: Attachment content
-            candidate: Download candidate
+        This is MODERATE validation - we check:
+        1. Content is not empty
+        2. Attachment is not too small (likely error)
 
-        Returns:
-            True if valid, False otherwise
+        We do NOT validate field types or values - that's done downstream.
+        Our job is to collect and store source data, not validate business logic.
         """
-        # Basic validation: non-empty content
+        # Check 1: Not empty
         if not content or len(content) == 0:
             logger.warning(f"Empty content for {candidate.identifier}")
             return False
 
-        # Add format-specific validation here
-        # For CSV: check headers
-        # For JSON: try parse
-        # For PDF: check magic bytes
-        # etc.
+        # Check 2: File not too small (likely error)
+        if len(content) < 10:
+            logger.error(f"Content suspiciously small: {len(content)} bytes")
+            return False
 
+        # That's it! Don't check field types or values.
         return True
 
 
@@ -520,6 +521,53 @@ def main(
 
 if __name__ == "__main__":
     main()
+```
+
+## CRITICAL: Mandatory Integration Test
+
+**EVERY scraper MUST include an integration test that actually downloads a real attachment.**
+
+```python
+def test_integration_actual_download():
+    """
+    INTEGRATION TEST: Download actual attachment from email.
+
+    Email REQUIRES credentials (no anonymous email).
+    Only hostname can be hardcoded, password must be from env.
+    """
+    import pytest
+    import os
+
+    # Check ONLY sensitive credentials (password, not hostname)
+    email_password = os.getenv("{SOURCE_UPPER}_EMAIL_PASSWORD")
+    if not email_password:
+        pytest.skip(
+            "{SOURCE_UPPER}_EMAIL_PASSWORD not provided. "
+            "User chose not to provide credentials for CI testing."
+        )
+
+    # Public info can be hardcoded
+    collector = {SourceCamelCase}{TypeCamelCase}Collector(
+        email_host="imap.gmail.com",  # Public, can hardcode
+        email_port=993,
+        email_username=os.getenv("{SOURCE_UPPER}_EMAIL_USERNAME"),
+        email_password=email_password,  # Sensitive, from env
+        mailbox="INBOX",
+        attachment_pattern=r".*\.csv",
+        s3_bucket="test-bucket",
+        s3_prefix="test",
+        redis_client=mock_redis,
+        environment="dev"
+    )
+
+    start_date = (datetime.now() - timedelta(days=7)).date()
+    candidates = collector.generate_candidates(start_date=start_date)
+
+    assert len(candidates) > 0
+    content = collector.collect_content(candidates[0])
+    assert len(content) > 100
+
+    print(f"✅ Downloaded {len(content)} bytes from email")
 ```
 
 ## Test File Template

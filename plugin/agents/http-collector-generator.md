@@ -30,7 +30,9 @@ You will receive structured data about:
 
 ### 1. Main Scraper File
 
-**Location:** `sourcing/scraping/{source}/scraper_{source}_{type}_http.py`
+**Location:** `sourcing/scraping/{source}/{dataset_name}/__main__.py`
+
+**Note:** Using `__main__.py` follows Python convention and allows clean execution via `python -m sourcing.scraping.{source}.{dataset_name}`
 
 **Required Components:**
 1. Module docstring with metadata
@@ -44,7 +46,7 @@ You will receive structured data about:
 
 ### 2. Test File
 
-**Location:** `sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_http.py`
+**Location:** `sourcing/scraping/{source}/{dataset_name}/tests/test_scraper.py`
 
 **Required Tests:**
 - `test_generate_candidates()` - Date range handling
@@ -54,6 +56,66 @@ You will receive structured data about:
 - `test_validate_content_invalid()` - Malformed responses
 - `test_run_collection_deduplication()` - Redis hash checking
 - `test_run_collection_force()` - Force flag behavior
+
+## CRITICAL: Mandatory Integration Test
+
+**EVERY scraper MUST include an integration test that actually downloads a real sample file and validates it.**
+
+This test ensures that if we make changes to the collection framework or scraper code, we immediately know if collection is broken.
+
+### Integration Test Requirements:
+
+```python
+def test_integration_actual_download():
+    """
+    INTEGRATION TEST: Download actual file from source and validate.
+
+    This test:
+    1. Uses real API credentials (from env vars) for SENSITIVE data only
+    2. Downloads an actual file from the data source
+    3. Validates the downloaded content is correct
+    4. Public info (URLs, hostnames) can be hardcoded
+
+    If credentials not provided, skip with message documenting user choice.
+    """
+    import pytest
+    import os
+
+    # Check ONLY sensitive credentials (API key, password, token)
+    api_key = os.getenv("{SOURCE_UPPER}_API_KEY")
+    if not api_key:
+        pytest.skip(
+            "{SOURCE_UPPER}_API_KEY not provided. "
+            "User chose not to provide credentials for CI testing. "
+            "This test MUST pass locally before deployment."
+        )
+
+    # Public info can be hardcoded
+    collector = {SourceCamelCase}{TypeCamelCase}Collector(
+        api_key=api_key,
+        s3_bucket="test-bucket",
+        s3_prefix="test",
+        redis_client=mock_redis,
+        environment="dev"
+    )
+
+    # Generate candidates for recent data
+    start_date = datetime.now() - timedelta(days=1)
+    end_date = datetime.now()
+    candidates = collector.generate_candidates(start_date, end_date)
+
+    assert len(candidates) > 0, "No candidates from real source"
+
+    # Download first file
+    content = collector.collect_content(candidates[0])
+
+    # Validate structure, not values
+    assert len(content) > 0
+    data = json.loads(content)
+    assert isinstance(data, (list, dict))
+
+    print(f"✅ Integration test passed: Downloaded {len(content)} bytes")
+```
 
 ### 3. Test Fixtures
 
@@ -157,13 +219,13 @@ To obtain an API key:
 #### Step 3: Write README
 
 ```python
-Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+Write("sourcing/scraping/{source_lower}/{dataset_name}/README.md", readme_content)
 ```
 
 #### Step 4: Verify README Created
 
 ```python
-Read("sourcing/scraping/{source_lower}/README.md")
+Read("sourcing/scraping/{source_lower}/{dataset_name}/README.md")
 ```
 
 **README Generation Rules:**
@@ -218,10 +280,17 @@ logger = setup_logging()
 class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
     """Collector for {SOURCE} {DATA_TYPE} data."""
 
-    def __init__(self, api_key: str, **kwargs: Any) -> None:
+    def __init__(self, api_key: Optional[str] = None, **kwargs: Any) -> None:
         super().__init__(dgroup="{source_snake}_{type_snake}", **kwargs)
-        self.api_key: str = api_key
+        self.api_key: Optional[str] = api_key
         self.base_url: str = "{BASE_URL}"
+
+    def _build_headers(self) -> Dict[str, str]:
+        """Build request headers, including auth if API key provided."""
+        headers = {"Accept": "application/json"}
+        if self.api_key:
+            headers["{AUTH_HEADER_NAME}"] = self.api_key
+        return headers
 
     def generate_candidates(
         self,
@@ -246,10 +315,7 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
                     "query_params": {
                         # BUILD FROM USER INPUT
                     },
-                    "headers": {
-                        "{AUTH_HEADER_NAME}": self.api_key,
-                        "Accept": "application/json"
-                    }
+                    "headers": self._build_headers()
                 },
                 file_date=current.date()
             )
@@ -273,20 +339,42 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         return response.content
 
     def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
-        """Validate JSON response structure."""
+        """Validate that we got a proper response (not an error or garbage).
+
+        This is MODERATE validation - we check:
+        1. Content is not empty
+        2. Content is parseable (for structured formats like JSON)
+        3. Response is not an API error
+
+        We do NOT validate field types or values - that's done downstream.
+        Our job is to collect and store source data, not validate business logic.
+        """
         import json
 
-        try:
-            data = json.loads(content)
-            # ADD VALIDATION BASED ON EXPECTED SCHEMA
-            return len(data) > 0
-        except json.JSONDecodeError:
+        # Check 1: Not empty
+        if len(content) == 0:
+            logger.warning("Empty response received")
             return False
 
+        # Check 2: Parseable (for JSON APIs)
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError:
+            logger.error("Response is not valid JSON")
+            return False
+
+        # Check 3: Not an API error response
+        if isinstance(data, dict) and "error" in data and "data" not in data:
+            logger.error(f"API returned error: {data.get('error')}")
+            return False
+
+        # That's it! Don't check field types or values.
+        return True
+
 @click.command()
-@click.option("--api-key", required=True, help="API key for authentication")
-@click.option("--start-date", type=click.DateTime(formats=["%Y-%m-%d"]), required=True, help="Start date (YYYY-MM-DD)")
-@click.option("--end-date", type=click.DateTime(formats=["%Y-%m-%d"]), required=True, help="End date (YYYY-MM-DD)")
+@click.option("--api-key", help="API key for authentication (optional, only if required by API)")
+@click.option("--start-date", type=click.DateTime(formats=["%Y-%m-%d"]), help="Start date (YYYY-MM-DD) - optional, defaults to today")
+@click.option("--end-date", type=click.DateTime(formats=["%Y-%m-%d"]), help="End date (YYYY-MM-DD) - optional, defaults to today")
 @click.option("--version", required=True, help="Version timestamp (format: YYYYMMDDHHMMSSZ, e.g., 20251215113400Z)")
 @click.option("--s3-bucket", required=True, help="S3 bucket name for data storage")
 @click.option("--s3-prefix", required=True, help="S3 key prefix (e.g., 'raw-data', 'sourcing')")
@@ -296,9 +384,9 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
 @click.option("--kafka-connection-string", help="Kafka connection string for notifications (optional)")
 @click.option("--log-level", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]), default="INFO", help="Logging level")
 def main(
-    api_key: str,
-    start_date: datetime,
-    end_date: datetime,
+    api_key: Optional[str],
+    start_date: Optional[datetime],
+    end_date: Optional[datetime],
     version: str,
     s3_bucket: str,
     s3_prefix: str,
@@ -309,6 +397,12 @@ def main(
     log_level: str
 ) -> None:
     """Collect {SOURCE} {DATA_TYPE} data."""
+
+    # Default dates to today if not provided
+    if start_date is None:
+        start_date = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+    if end_date is None:
+        end_date = datetime.now().replace(hour=23, minute=59, second=59, microsecond=999999)
 
     # Validate version format
     from sourcing.scraping.commons.s3_utils import validate_version_format
@@ -401,8 +495,10 @@ response = requests.get(url, auth=auth)
 
 - Source name: lowercase with underscores (nyiso, pjm, caiso)
 - Data type: lowercase with underscores (hourly_load, price_forecast)
+- Dataset name: lowercase with underscores (binding_constraints_realtime)
 - Class name: CamelCase (NyisoHourlyLoadCollector)
-- File name: snake_case (scraper_nyiso_hourly_load_http.py)
+- Directory structure: sourcing/scraping/{source}/{dataset_name}/__main__.py
+- One scraper per dataset directory
 
 ## Best Practices
 
@@ -421,20 +517,20 @@ After generation, report back to master agent:
 ✅ HTTP Scraper Generated Successfully
 
 **Files Created:**
-- sourcing/scraping/{source}/scraper_{source}_{type}_http.py (245 lines)
-- sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_http.py (180 lines)
-- sourcing/scraping/{source}/tests/fixtures/sample_response.json
-- sourcing/scraping/{source}/README.md
+- sourcing/scraping/{source}/{dataset_name}/__main__.py (245 lines)
+- sourcing/scraping/{source}/{dataset_name}/tests/test_scraper.py (180 lines)
+- sourcing/scraping/{source}/{dataset_name}/tests/fixtures/sample_response.json
+- sourcing/scraping/{source}/{dataset_name}/README.md
 
 **Configuration:**
 - DGroup: {source}_{type}
-- Environment Variable: {SOURCE}_API_KEY
+- Environment Variable: {SOURCE}_API_KEY (optional, only if required by API)
 - S3 Path: s3://bucket/sourcing/{source}_{type}/year=YYYY/month=MM/day=DD/
 - Redis Key: hash:{env}:{source}_{type}:{hash}
 
 **Next Steps:**
-1. Set API key: export {SOURCE}_API_KEY=your_key
+1. Set API key (if required): export {SOURCE}_API_KEY=your_key
 2. Configure Redis: export REDIS_HOST=localhost REDIS_PORT=6379
-3. Run tests: pytest sourcing/scraping/{source}/tests/ -v --cov
-4. Test scraper: python sourcing/scraping/{source}/scraper_{source}_{type}_http.py --start-date YYYY-MM-DD --end-date YYYY-MM-DD
+3. Run tests: pytest sourcing/scraping/{source}/{dataset_name}/tests/ -v --cov
+4. Test scraper: python -m sourcing.scraping.{source}.{dataset_name} --start-date YYYY-MM-DD --end-date YYYY-MM-DD
 ```

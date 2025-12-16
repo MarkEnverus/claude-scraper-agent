@@ -29,10 +29,12 @@ You will receive structured data about:
 
 Generate 4 files in the sourcing project:
 
-1. **Main Scraper** (`sourcing/scraping/{source}/scraper_{source}_{type}_ftp.py`)
-2. **Tests** (`sourcing/scraping/{source}/tests/test_scraper_{source}_{type}_ftp.py`)
-3. **Test Fixtures** (`sourcing/scraping/{source}/tests/fixtures/sample_file.{ext}`)
-4. **README** (`sourcing/scraping/{source}/README.md`) - **Use standardized template**
+1. **Main Scraper** (`sourcing/scraping/{source}/{dataset_name}/__main__.py`)
+2. **Tests** (`sourcing/scraping/{source}/{dataset_name}/tests/test_scraper.py`)
+3. **Test Fixtures** (`sourcing/scraping/{source}/{dataset_name}/tests/fixtures/sample_file.{ext}`)
+4. **README** (`sourcing/scraping/{source}/{dataset_name}/README.md`) - **Use standardized template**
+
+**Note:** Using `__main__.py` follows Python convention and allows clean execution via `python -m sourcing.scraping.{source}.{dataset_name}`
 
 ## README Generation
 
@@ -89,12 +91,12 @@ export {SOURCE_UPPER}_SSH_KEY_PATH="/path/to/private/key"
 
 ### Step 3: Write README
 ```python
-Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+Write("sourcing/scraping/{source_lower}/{dataset_name}/README.md", readme_content)
 ```
 
 ### Step 4: Verify
 ```python
-Read("sourcing/scraping/{source_lower}/README.md")
+Read("sourcing/scraping/{source_lower}/{dataset_name}/README.md")
 ```
 
 ## Code Template
@@ -154,8 +156,8 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         self,
         ftp_host: str,
         ftp_port: int,
-        ftp_username: str,
-        ftp_password: str,
+        ftp_username: Optional[str] = None,
+        ftp_password: Optional[str] = None,
         directory_path: str,
         file_pattern: str,
         s3_bucket: str,
@@ -171,8 +173,8 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         Args:
             ftp_host: FTP/SFTP server hostname
             ftp_port: Server port (21 for FTP, 22 for SFTP)
-            ftp_username: Authentication username
-            ftp_password: Authentication password (or SSH key path for SFTP)
+            ftp_username: Authentication username (optional for anonymous FTP)
+            ftp_password: Authentication password (optional for anonymous FTP, or SSH key path for SFTP)
             directory_path: Remote directory path
             file_pattern: Regex pattern to match files
             s3_bucket: Target S3 bucket
@@ -255,7 +257,11 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
 
         with FTP() as ftp:
             ftp.connect(self.ftp_host, self.ftp_port)
-            ftp.login(self.ftp_username, self.ftp_password)
+            # Use anonymous login if credentials not provided
+            if self.ftp_username and self.ftp_password:
+                ftp.login(self.ftp_username, self.ftp_password)
+            else:
+                ftp.login()  # Anonymous FTP
             ftp.cwd(self.directory_path)
 
             # List files
@@ -378,7 +384,11 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
 
         with FTP() as ftp:
             ftp.connect(self.ftp_host, self.ftp_port)
-            ftp.login(self.ftp_username, self.ftp_password)
+            # Use anonymous login if credentials not provided
+            if self.ftp_username and self.ftp_password:
+                ftp.login(self.ftp_username, self.ftp_password)
+            else:
+                ftp.login()  # Anonymous FTP
             ftp.cwd(self.directory_path)
 
             ftp.retrbinary(f"RETR {filename}", content.extend)
@@ -402,33 +412,33 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
         raise NotImplementedError("SFTP support requires paramiko library")
 
     def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
-        """
-        Validate downloaded file content.
+        """Validate that we got a proper file (not an error or garbage).
 
-        Args:
-            content: File content
-            candidate: Download candidate
+        This is MODERATE validation - we check:
+        1. Content is not empty
+        2. File is not too small (likely error)
 
-        Returns:
-            True if valid, False otherwise
+        We do NOT validate field types or values - that's done downstream.
+        Our job is to collect and store source data, not validate business logic.
         """
-        # Basic validation: non-empty content
+        # Check 1: Not empty
         if not content or len(content) == 0:
             logger.warning(f"Empty content for {candidate.identifier}")
             return False
 
-        # Add format-specific validation here
-        # For CSV: check headers
-        # For JSON: try parse
-        # etc.
+        # Check 2: File not too small (likely error)
+        if len(content) < 10:
+            logger.error(f"Content suspiciously small: {len(content)} bytes")
+            return False
 
+        # That's it! Don't check field types or values.
         return True
 
 
 @click.command()
 @click.option("--ftp-host", required=True, help="FTP server hostname")
-@click.option("--ftp-username", required=True, help="FTP username")
-@click.option("--ftp-password", required=True, help="FTP password")
+@click.option("--ftp-username", help="FTP username (optional for anonymous FTP)")
+@click.option("--ftp-password", help="FTP password (optional for anonymous FTP)")
 @click.option("--directory-path", required=True, help="FTP directory path")
 @click.option("--file-pattern", required=True, help="File pattern to match (regex)")
 @click.option("--start-date", type=click.DateTime(formats=["%Y-%m-%d"]), help="Start date filter (optional)")
@@ -443,8 +453,8 @@ class {SourceCamelCase}{TypeCamelCase}Collector(BaseCollector):
 @click.option("--log-level", type=click.Choice(["DEBUG", "INFO", "WARNING", "ERROR"]), default="INFO", help="Logging level")
 def main(
     ftp_host: str,
-    ftp_username: str,
-    ftp_password: str,
+    ftp_username: Optional[str],
+    ftp_password: Optional[str],
     directory_path: str,
     file_pattern: str,
     start_date: Optional[datetime],
@@ -519,6 +529,47 @@ def main(
 
 if __name__ == "__main__":
     main()
+```
+
+## CRITICAL: Mandatory Integration Test
+
+**EVERY scraper MUST include an integration test that actually downloads a real file.**
+
+```python
+def test_integration_actual_download():
+    """
+    INTEGRATION TEST: Download actual file from FTP and validate.
+
+    Only checks SENSITIVE credentials (password). Hostname can be hardcoded.
+    """
+    import pytest
+    import os
+
+    # Check ONLY sensitive credentials (password, not hostname)
+    ftp_password = os.getenv("{SOURCE_UPPER}_FTP_PASSWORD")
+    # For anonymous FTP, skip this check
+
+    # Public info can be hardcoded
+    collector = {SourceCamelCase}{TypeCamelCase}Collector(
+        ftp_host="ftp.example.com",  # Public, can hardcode
+        ftp_port=21,
+        ftp_username=os.getenv("{SOURCE_UPPER}_FTP_USERNAME"),
+        ftp_password=ftp_password,  # Sensitive, from env
+        directory_path="/pub/data",
+        file_pattern=r".*\.csv",
+        s3_bucket="test-bucket",
+        s3_prefix="test",
+        redis_client=mock_redis,
+        environment="dev"
+    )
+
+    candidates = collector.generate_candidates()
+    assert len(candidates) > 0
+
+    content = collector.collect_content(candidates[0])
+    assert len(content) > 100
+
+    print(f"✅ Downloaded {len(content)} bytes from FTP")
 ```
 
 ## Test File Template

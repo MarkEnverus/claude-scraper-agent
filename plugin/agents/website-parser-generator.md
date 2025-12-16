@@ -23,7 +23,14 @@ You are the Website Parsing Scraper Specialist. You generate production-ready sc
 
 ## What You Generate
 
-Same structure as HTTP collector but with website parsing logic.
+Generate 4 files in the sourcing project:
+
+1. **Main Scraper** (`sourcing/scraping/{source}/{dataset_name}/__main__.py`)
+2. **Tests** (`sourcing/scraping/{source}/{dataset_name}/tests/test_scraper.py`)
+3. **Test Fixtures** (`sourcing/scraping/{source}/{dataset_name}/tests/fixtures/sample_page.html`)
+4. **README** (`sourcing/scraping/{source}/{dataset_name}/README.md`) - **Use standardized template**
+
+**Note:** Using `__main__.py` follows Python convention and allows clean execution via `python -m sourcing.scraping.{source}.{dataset_name}`
 
 ## Code Template (Key Differences)
 
@@ -118,6 +125,36 @@ class {Source}{Type}Collector(BaseCollector):
         )
         response.raise_for_status()
         return response.content
+
+    def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
+        """Validate that we got a proper file (not an error page or garbage).
+
+        This is MODERATE validation - we check:
+        1. Content is not empty
+        2. Content is parseable (for structured formats)
+        3. File is not an HTML error page
+
+        We do NOT validate field types or values - that's done downstream.
+        Our job is to collect and store source data, not validate business logic.
+        """
+        # Check 1: Not empty
+        if not content or len(content) == 0:
+            logger.warning("Empty response received")
+            return False
+
+        # Check 2: File not too small (likely error)
+        if len(content) < 10:
+            logger.error(f"Content suspiciously small: {len(content)} bytes")
+            return False
+
+        # Check 3: Not an HTML error page (if expecting non-HTML)
+        if not candidate.identifier.endswith('.html'):
+            if content.startswith(b'<!DOCTYPE') or content.startswith(b'<html'):
+                logger.error("Expected data file but got HTML page (likely 404 or error)")
+                return False
+
+        # That's it! Don't check field types or values.
+        return True
 ```
 
 ## CLI Template (Normalized Pattern)
@@ -279,13 +316,80 @@ Use the same substitution list as HTTP collector, with these Website Parsing-spe
 
 ### Step 3: Write README
 ```python
-Write("sourcing/scraping/{source_lower}/README.md", readme_content)
+Write("sourcing/scraping/{source_lower}/{dataset_name}/README.md", readme_content)
 ```
 
 ### Step 4: Verify
 ```python
-Read("sourcing/scraping/{source_lower}/README.md")
+Read("sourcing/scraping/{source_lower}/{dataset_name}/README.md")
 ```
+
+## CRITICAL: Mandatory Integration Test
+
+**EVERY scraper MUST include an integration test that actually downloads a real sample file and validates it.**
+
+This test ensures that if we make changes to the collection framework or scraper code, we immediately know if collection is broken.
+
+### Integration Test Requirements:
+
+```python
+def test_integration_actual_download():
+    """
+    INTEGRATION TEST: Parse actual website and download file.
+
+    This test:
+    1. Connects to actual website and parses HTML
+    2. Extracts download links
+    3. Downloads an actual file
+    4. Validates the downloaded content is correct
+    5. Uses hash or structure validation
+
+    This test may be skipped in CI if website requires auth, but
+    MUST pass when run locally before deployment.
+    """
+    import pytest
+    import os
+
+    # Initialize collector
+    collector = {SourceCamelCase}{TypeCamelCase}Collector(
+        base_url="https://example.com/data",
+        link_selector="a.download-link",
+        s3_bucket="test-bucket",
+        s3_prefix="test",
+        redis_client=mock_redis,
+        environment="dev"
+    )
+
+    # Parse website and extract links
+    candidates = collector.generate_candidates(
+        start_date=datetime.now(),
+        end_date=datetime.now()
+    )
+
+    # Should have at least one file link
+    assert len(candidates) > 0, "No download links found on website"
+
+    # Download the first file
+    first_candidate = candidates[0]
+    content = collector.collect_content(first_candidate)
+
+    # Validate content
+    assert len(content) > 0, "Downloaded content is empty"
+    assert len(content) > 100, "File suspiciously small"
+
+    # Ensure we didn't get an HTML error page
+    assert not content.startswith(b'<!DOCTYPE'), "Downloaded HTML page instead of data file"
+
+    print(f"✅ Integration test passed: Downloaded {len(content)} bytes from website")
+```
+
+### Integration Test Best Practices:
+- Test against actual website
+- Validate extracted links are correct
+- Ensure downloaded file is not HTML error page
+- Validate file size and structure
+- Make it fast - download only one file
+- Skip if website requires credentials not available in CI
 
 ## Generation Steps
 
