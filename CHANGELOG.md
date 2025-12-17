@@ -5,24 +5,6 @@ All notable changes to the Scraper Development Agent plugin will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [1.13.0] - 2025-12-16
-
-### Fixed
-- **CRITICAL**: BA Agent (v2.2.0) now ACTUALLY writes files (not just claims to)
-  - Replaced JavaScript pseudo-code with explicit "ACTUALLY USE THE TOOL" instructions
-  - Added "YOU ARE EXECUTING IN USER'S WORKING DIRECTORY" awareness
-  - Added anti-hallucination enforcement checklist before claiming files created
-  - Agent must verify with Read tool and check results before claiming success
-- **CRITICAL**: BA Agent hallucination prevention - NO making up endpoints
-  - Added absolute prohibition on inventing/guessing/extrapolating endpoints
-  - Must ONLY document endpoints explicitly shown in documentation
-  - Added verification questions: "Did I see this exact endpoint in docs?"
-  - If uncertain, DO NOT include endpoint
-
-### Changed
-- File Writing section: Removed pseudo-code, added explicit tool call requirements
-- Endpoint Enumeration section: Added "ABSOLUTE PROHIBITION: NO HALLUCINATION" with verification
-
 ## [1.12.0] - 2025-12-16
 
 ### Fixed
