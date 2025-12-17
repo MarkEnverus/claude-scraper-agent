@@ -5,6 +5,47 @@ All notable changes to the Scraper Development Agent plugin will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.14.0] - 2025-12-16
+
+### Added
+- **NEW AGENT**: Endpoint QA Validator (endpoint-qa-validator.md v1.0.0)
+  - Live endpoint testing with curl (HEAD requests with authentication support)
+  - Tests ALL discovered endpoints for existence (200/401/403 = keep, 404 = remove)
+  - Automatic hallucination detection and removal
+  - 1 second delay between tests to respect rate limits
+  - Generates comprehensive QA report with curl test artifacts
+  - User confirmation required if all endpoints fail validation
+  - Runs after BA Collator, before presenting results to user
+- **Source-First Constraint** in BA Agent endpoint enumeration
+  - Explicit knowledge limitation to documentation page only
+  - Evidence requirements for each endpoint (doc_quote, extraction_method, doc_section)
+  - Self-audit questions before saving phase1_documentation.json
+- **Comprehensive Prohibition List** with specific hallucination patterns to avoid
+- **Hallucination Warning Signs** checklist for agent self-awareness
+
+### Fixed
+- **CRITICAL**: BA Agent (v2.3.0) enhanced context preservation
+  - Strengthened instructions to stay in agent context when asking questions
+  - Added VERIFICATION step before using AskUserQuestion
+  - Explicit FORBIDDEN BEHAVIORS list to prevent context loss
+- **CRITICAL**: BA Agent file persistence improvements
+  - Removed user verification messages (agent verifies with Read tool)
+  - Added clear success/retry/failure logic in file writing checklist
+  - Agent now tells user final file location after verification
+- **CRITICAL**: Endpoint hallucination prevention with QA validator
+  - Independent verification layer catches hallucinated endpoints
+  - Live curl testing provides definitive proof of endpoint existence
+  - Pattern detection flags suspicious endpoint naming conventions
+  - Rapid falsification testing: "guilty until proven innocent" approach
+
+### Changed
+- BA Agent workflow now includes Step 5: QA Validator invocation
+  - Old workflow: Run 1 → Validator → Run 2 → Collator → Present Results
+  - New workflow: Run 1 → Validator → Run 2 → Collator → **QA Validator** → Present Results
+- BA Agent version: 2.2.0 → 2.3.0
+- Plugin version: 1.13.0 → 1.14.0
+- Final results now include QA validation metrics (verified count, removed count, flagged count)
+
 ## [1.13.0] - 2025-12-16
 
 ### Fixed

@@ -1,9 +1,9 @@
-# Claude Scraper Agent v1.13.0
+# Claude Scraper Agent v1.14.0
 
 Automated scraper generation system for data collection pipelines using Claude Code. Generates type-safe, quality-checked scrapers with tabbed question interface, version tracking, and maintenance tools.
 
-**Latest Updates (v1.13.0):**
-- BA Agent v2.2.0: CRITICAL - Explicit tool usage enforcement (no pseudo-code), absolute hallucination prohibition, working directory awareness
+**Latest Updates (v1.14.0):**
+- BA Agent v2.3.0: CRITICAL - QA endpoint validator with live curl testing, enhanced context preservation, source-first constraints, improved file persistence verification
 
 ## Overview
 
