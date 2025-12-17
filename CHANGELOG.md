@@ -5,6 +5,30 @@ All notable changes to the Scraper Development Agent plugin will be documented i
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.12.0] - 2025-12-16
+
+### Fixed
+- **CRITICAL**: BA Agent (v2.1.0) context loss when asking questions
+  - Agent now stays in context when using AskUserQuestion
+  - Questions are checkpoints, not exit points
+  - Agent continues analysis immediately after receiving user's answer
+- **CRITICAL**: BA Agent files not being created
+  - Mandatory Read() verification after every Write()
+  - Must create datasource_analysis/ directory first
+  - Cannot proceed to next phase if file write fails
+- **CRITICAL**: BA Agent incomplete endpoint enumeration
+  - Must expand ALL collapsible sections before extraction
+  - Must take screenshot proof of expanded state
+  - Must extract ALL endpoints systematically (not samples or guesses)
+  - Validation checklist required before proceeding to Phase 2
+  - Prohibition on guessing endpoints without documentation evidence
+
+### Added
+- Agent Context & Question Handling section with explicit instructions
+- File Writing & Verification section with mandatory verification process
+- Systematic Endpoint Enumeration with expand-extract-validate workflow
+- Comprehensive validation checklists for completeness verification
+
 ## [1.11.0] - 2025-12-16
 
 ### Fixed
