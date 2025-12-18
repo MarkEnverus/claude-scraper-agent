@@ -1,0 +1,31 @@
+{
+  "effectiveDate": "2025-01-15",
+  "marketType": "RT",
+  "dataType": "MCP",
+  "timestamp": "2025-01-15T12:00:00Z",
+  "locations": [
+    {
+      "locationId": "MINN.HUB",
+      "locationName": "Minnesota Hub",
+      "locationType": "Hub",
+      "zone": "MINN",
+      "intervalData": [
+        {
+          "timestamp": "2025-01-15T12:00:00Z",
+          "intervalEnd": "2025-01-15T12:05:00Z",
+          "mcp": 3.25
+        },
+        {
+          "timestamp": "2025-01-15T12:05:00Z",
+          "intervalEnd": "2025-01-15T12:10:00Z",
+          "mcp": 3.50
+        },
+        {
+          "timestamp": "2025-01-15T12:10:00Z",
+          "intervalEnd": "2025-01-15T12:15:00Z",
+          "mcp": 3.40
+        }
+      ]
+    }
+  ]
+}

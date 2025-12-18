@@ -1,0 +1,37 @@
+{
+  "effectiveDate": "2025-01-15",
+  "marketType": "RT",
+  "dataType": "LMP",
+  "timestamp": "2025-01-15T12:00:00Z",
+  "locations": [
+    {
+      "locationId": "ALTW.ALTO1",
+      "locationName": "ALTW.ALTO1 - Node",
+      "locationType": "Node",
+      "zone": "ALTW",
+      "intervalData": [
+        {
+          "timestamp": "2025-01-15T12:00:00Z",
+          "intervalEnd": "2025-01-15T12:05:00Z",
+          "lmp": 25.75,
+          "mcc": 5.30,
+          "mlc": 20.45
+        },
+        {
+          "timestamp": "2025-01-15T12:05:00Z",
+          "intervalEnd": "2025-01-15T12:10:00Z",
+          "lmp": 26.10,
+          "mcc": 5.35,
+          "mlc": 20.75
+        },
+        {
+          "timestamp": "2025-01-15T12:10:00Z",
+          "intervalEnd": "2025-01-15T12:15:00Z",
+          "lmp": 25.90,
+          "mcc": 5.28,
+          "mlc": 20.62
+        }
+      ]
+    }
+  ]
+}

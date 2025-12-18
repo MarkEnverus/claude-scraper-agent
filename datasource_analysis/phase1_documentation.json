@@ -1,0 +1,155 @@
+{
+  "source": "MISO Energy Data Exchange - Pricing API",
+  "timestamp": "2024-01-09T00:00:00Z",
+  "url": "https://data-exchange.misoenergy.org/api-details#api=pricing-api",
+  "endpoint_discovery": {
+    "total_endpoints_found": 10,
+    "collapsible_sections_expanded": 0,
+    "extraction_method": "webfetch",
+    "screenshot_taken": false,
+    "systematic_enumeration_completed": false
+  },
+  "auth_claims": {
+    "auth_section_found": true,
+    "auth_section_text": "Response: 401 Unauthorized - Invalid or missing Bearer Token in the Authorization header",
+    "signup_links": [
+      "https://data-exchange.misoenergy.org/signup",
+      "https://data-exchange.misoenergy.org/signin"
+    ],
+    "api_key_mentioned": false,
+    "subscription_mentioned": false,
+    "auth_header_examples": [],
+    "conclusion": "API requires Bearer Token authentication in Authorization header. Signup/signin functionality is available. 401 response indicates authentication is enforced."
+  },
+  "endpoints": [
+    {
+      "endpoint_id": "get-v1-aggregated-pnode",
+      "path": "/v1/aggregated-pnode",
+      "method": "GET",
+      "description": "List of Aggregated Pnode with their types.",
+      "parameters": [
+        {
+          "name": "date",
+          "type": "string",
+          "required": false,
+          "description": "Filter by date. Defaults to current date if not specified.",
+          "example": null
+        },
+        {
+          "name": "node",
+          "type": "string",
+          "required": false,
+          "description": "Filter to a specific Pricing Node.",
+          "example": null
+        },
+        {
+          "name": "pageNumber",
+          "type": "integer",
+          "required": false,
+          "description": "",
+          "example": null
+        }
+      ],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-day-ahead-ex-ante-lmp",
+      "path": "/v1/day-ahead-ex-ante-lmp",
+      "method": "GET",
+      "description": "Day-Ahead Ex-Ante LMP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-day-ahead-ex-ante-mcp",
+      "path": "/v1/day-ahead-ex-ante-mcp",
+      "method": "GET",
+      "description": "Day-Ahead Ex-Ante MCP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-day-ahead-ex-post-lmp",
+      "path": "/v1/day-ahead-ex-post-lmp",
+      "method": "GET",
+      "description": "Day-Ahead Ex-Post LMP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-day-ahead-ex-post-mcp",
+      "path": "/v1/day-ahead-ex-post-mcp",
+      "method": "GET",
+      "description": "Day-Ahead Ex-Post MCP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-real-time-ex-ante-lmp",
+      "path": "/v1/real-time-ex-ante-lmp",
+      "method": "GET",
+      "description": "Real-Time Ex-Ante LMP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-real-time-ex-ante-mcp",
+      "path": "/v1/real-time-ex-ante-mcp",
+      "method": "GET",
+      "description": "Real-Time Ex-Ante MCP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-real-time-ex-post-lmp",
+      "path": "/v1/real-time-ex-post-lmp",
+      "method": "GET",
+      "description": "Real-Time Ex-Post LMP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-real-time-ex-post-mcp",
+      "path": "/v1/real-time-ex-post-mcp",
+      "method": "GET",
+      "description": "Real-Time Ex-Post MCP",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    },
+    {
+      "endpoint_id": "get-v1-real-time-mcp-summary",
+      "path": "/v1/real-time-mcp-summary",
+      "method": "GET",
+      "description": "Real-Time MCP Summary",
+      "parameters": [],
+      "response_format": "JSON",
+      "authentication_mentioned": true
+    }
+  ],
+  "doc_quality": "MEDIUM",
+  "notes": "The documentation shows 10 endpoints visible in the operation list. Only the 'Aggregated Pnode' endpoint is fully expanded with detailed parameter documentation, response schemas, and example responses. The remaining 9 endpoints are listed but not expanded in the HTML dump, so their detailed parameters, request/response schemas are not visible. The API requires Bearer Token authentication. Full documentation is available in OpenAPI 3 (YAML/JSON), OpenAPI 2 (JSON), and WADL formats. The expanded endpoint shows good structure with PageInfo pagination, typed response schemas (AggregatedPnode, PageInfo), and proper error responses (400, 401, 404). However, since only 1 of 10 endpoints is fully documented in this view, overall quality is rated MEDIUM. The API focuses on electricity pricing data including LMP (Locational Marginal Price) and MCP (Market Clearing Price) for both day-ahead and real-time markets.",
+  "source_type": "API",
+  "data_inventory": null,
+  "access_requirements": {
+    "authentication": "Bearer Token in Authorization header",
+    "registration": {
+      "signup_url": "https://data-exchange.misoenergy.org/signup",
+      "signin_url": "https://data-exchange.misoenergy.org/signin"
+    },
+    "terms_of_use_url": null,
+    "subscription_required": false,
+    "rate_limits": "Not specified in documentation"
+  },
+  "update_frequency": "Real-time and Day-Ahead data (inferred from endpoint names)",
+  "portal_type": "API_DOCS",
+  "extraction_quality": "PARTIAL"
+}

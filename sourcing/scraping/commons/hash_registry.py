@@ -1,0 +1,1 @@
+../../infrastructure/hash_registry.py

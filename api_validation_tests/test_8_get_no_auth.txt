@@ -1,0 +1,20 @@
+Endpoint: https://data-exchange.misoenergy.org/api-details#api=pricing-api/v1/real-time-ex-post-lmp
+Method: HTTPMethod.GET
+Status: 200 OK
+
+Headers:
+  Date: Thu, 18 Dec 2025 22:38:29 GMT
+  Content-Type: text/html
+  Transfer-Encoding: chunked
+  Connection: keep-alive
+  Cache-Control: no-cache
+  ETag: 984109554
+  x-ms-client-request-id: 1d407c9e-9284-442f-8558-69aaafd7e621
+  X-Response-Time: 22.337ms
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: sameorigin
+  X-XSS-Protection: 1; mode=block
+  Strict-Transport-Security: max-age=31536000;includeSubDomains;
+
+Body Preview:
+<!DOCTYPE html><html lang="en"><head><link rel="shortcut icon" href="/content/MISO Icon Only - Blue Green_RGB.png"><meta charset="utf-8"><meta name="viewport" content="width=device-width,minimum-scale=1,initial-scale=1"><link href="/styles/theme.css" rel="stylesheet" type="text/css"><script src="/scripts/theme.js" type="text/javascript"></script><title>APIs: Details - MISO Data Exchange</title><meta name="description" content="Discover APIs, learn how to use them, try them out interactively, and sign up to acquire keys."><meta name="keywords" content="MISO, API, developer"><meta name="author" content="MISO Energy"><link href="/styles/styles.css" rel="stylesheet" type="text/css"><meta property="og:type" content="article"><meta property="og:site_name" content="MISO Data Exchange"><meta property="og:title" content="APIs: Details"><meta property="og:description" content="Discover APIs, learn how to use them, try them out interactively, and sign up to acquire keys."><meta property="og:url" 

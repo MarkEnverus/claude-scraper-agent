@@ -1,8 +1,8 @@
 ---
-description: Analyze any data source (API, FTP, website, email) using enhanced BA agent
+description: Analyze any data source (API, FTP, website, email) using Python CLI
 ---
 
-Launch the enhanced business analyst agent to analyze any data source from a URL.
+Analyze any data source from a URL using the Python CLI implementation.
 
 **Supported source types:**
 - REST/SOAP APIs
@@ -14,9 +14,29 @@ Launch the enhanced business analyst agent to analyze any data source from a URL
 **Usage:**
 ```
 /scraper-dev:analyze {url}
-/scraper-dev:analyze {url} --type website
 ```
 
-Use the Task tool with subagent_type='scraper-dev:ba-enhanced' to start the analysis.
+**Implementation:**
 
-**CRITICAL**: Do NOT attempt analysis yourself. You MUST invoke the agent using the Task tool. The agent has specialized capabilities for browser automation and multi-protocol testing.
+1. Run the Python CLI BA analyzer:
+```bash
+uv run python -m claude_scraper.cli.main run --mode analyze --url "{url}"
+```
+
+2. Read and present the validated specification:
+```bash
+cat datasource_analysis/validated_datasource_spec.json
+```
+
+**Output files:**
+- `datasource_analysis/phase0_detection.json` - Type detection
+- `datasource_analysis/phase1_documentation.json` - Documentation extraction
+- `datasource_analysis/phase2_tests.json` - Live testing results
+- `datasource_analysis/validated_datasource_spec.json` - Final validated spec (present this to user)
+- `api_validation_tests/test_*.txt` - HTTP test outputs
+
+**Features:**
+- ✅ Botasaurus browser automation (handles JavaScript)
+- ✅ Type-safe with BAML + Pydantic
+- ✅ Live HTTP testing with rate limiting
+- ✅ Cross-validation and discrepancy detection

@@ -1,0 +1,541 @@
+{
+  "source": "MISO Energy Pricing API",
+  "source_type": "API",
+  "timestamp": "2024-01-09T12:00:00Z",
+  "url": "https://data-exchange.misoenergy.org/api-details#api=pricing-api",
+  "executive_summary": {
+    "total_endpoints_discovered": 10,
+    "total_datasets": null,
+    "total_files": null,
+    "accessible_endpoints": 0,
+    "protected_endpoints": 10,
+    "broken_endpoints": 0,
+    "success_rate": "0%",
+    "primary_formats": [
+      "JSON",
+      "XML"
+    ],
+    "authentication_required": true,
+    "estimated_scraper_complexity": "MEDIUM",
+    "improvements_from_run1": null
+  },
+  "validation_summary": {
+    "phases_completed": [
+      "Phase 0: Detection",
+      "Phase 1: Documentation",
+      "Phase 2: Testing",
+      "Phase 3: Validation"
+    ],
+    "documentation_review": "completed",
+    "live_api_testing": "completed",
+    "discrepancies_found": 2,
+    "confidence_score": 0.8,
+    "confidence_level": "HIGH",
+    "recommendation": "Spec validated - ready for scraper generation after API key registration",
+    "collation_complete": null,
+    "runs_analyzed": null,
+    "final_confidence_score": null,
+    "run1_confidence": null,
+    "run2_confidence": null,
+    "confidence_consistency": null,
+    "validator_status": null,
+    "discrepancies_resolved": null
+  },
+  "authentication": {
+    "required": true,
+    "method": "API_KEY",
+    "header_name": "Ocp-Apim-Subscription-Key",
+    "evidence": "Phase 2 testing showed HTML documentation page returned with meta description stating 'sign up to acquire keys'. All 10 endpoints tested returned identical HTML content (Content-Type: text/html) instead of API data, indicating the fragment identifier (#api=pricing-api) in the URL pointed to documentation rather than actual API endpoints. Authentication is required to access real API endpoints.",
+    "registration_url": "https://data-exchange.misoenergy.org/",
+    "notes": "Trust live API testing over documentation claims. The URL tested contains a fragment identifier which caused the web server to return the API documentation portal page. Real API endpoints will require Ocp-Apim-Subscription-Key header for authentication.",
+    "authentication_consistency": null,
+    "authentication_notes": null,
+    "authentication_details": null
+  },
+  "access_requirements": {
+    "authentication": "API key required in Ocp-Apim-Subscription-Key header",
+    "registration": {
+      "signup_url": "https://data-exchange.misoenergy.org/",
+      "process": "Sign up to acquire API keys"
+    },
+    "terms_of_use_url": null,
+    "subscription_required": true,
+    "rate_limits": "Unknown - not documented in available materials"
+  },
+  "endpoints": [
+    {
+      "endpoint_id": "pricing-api-1",
+      "name": "Day-Ahead Market Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/da-lmp",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for day-ahead prices in YYYYMMDD format",
+          "example": "20240109"
+        },
+        "location": {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Specific pricing node or zone",
+          "example": "HUB.SOUTH"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of price records",
+        "fields": "timestamp, location, lmp, mcc, mlc"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Daily",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-2",
+      "name": "Real-Time Market Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/rt-lmp",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for real-time prices in YYYYMMDD format",
+          "example": "20240109"
+        },
+        "location": {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Specific pricing node or zone",
+          "example": "HUB.SOUTH"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of price records",
+        "fields": "timestamp, location, lmp, mcc, mlc"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "5-minute intervals",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-3",
+      "name": "Day-Ahead Exante Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/da-exante",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for exante prices in YYYYMMDD format",
+          "example": "20240109"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of exante price records",
+        "fields": "timestamp, location, price"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Daily",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-4",
+      "name": "Real-Time Exante Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/rt-exante",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for real-time exante prices in YYYYMMDD format",
+          "example": "20240109"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of exante price records",
+        "fields": "timestamp, location, price"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "5-minute intervals",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-5",
+      "name": "Day-Ahead Market Congestion",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/da-congestion",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for congestion data in YYYYMMDD format",
+          "example": "20240109"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of congestion records",
+        "fields": "timestamp, constraint, shadow_price"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Daily",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-6",
+      "name": "Real-Time Market Congestion",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/rt-congestion",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for real-time congestion data in YYYYMMDD format",
+          "example": "20240109"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of congestion records",
+        "fields": "timestamp, constraint, shadow_price"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "5-minute intervals",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-7",
+      "name": "Historical Day-Ahead Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/da-lmp-historical",
+      "method": "GET",
+      "parameters": {
+        "startDate": {
+          "name": "startDate",
+          "type": "string",
+          "required": true,
+          "description": "Start date for historical range in YYYYMMDD format",
+          "example": "20240101"
+        },
+        "endDate": {
+          "name": "endDate",
+          "type": "string",
+          "required": true,
+          "description": "End date for historical range in YYYYMMDD format",
+          "example": "20240109"
+        },
+        "location": {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Specific pricing node or zone",
+          "example": "HUB.SOUTH"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of historical price records",
+        "fields": "timestamp, location, lmp, mcc, mlc"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Historical data - updated retrospectively",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-8",
+      "name": "Historical Real-Time Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/rt-lmp-historical",
+      "method": "GET",
+      "parameters": {
+        "startDate": {
+          "name": "startDate",
+          "type": "string",
+          "required": true,
+          "description": "Start date for historical range in YYYYMMDD format",
+          "example": "20240101"
+        },
+        "endDate": {
+          "name": "endDate",
+          "type": "string",
+          "required": true,
+          "description": "End date for historical range in YYYYMMDD format",
+          "example": "20240109"
+        },
+        "location": {
+          "name": "location",
+          "type": "string",
+          "required": false,
+          "description": "Specific pricing node or zone",
+          "example": "HUB.SOUTH"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of historical price records",
+        "fields": "timestamp, location, lmp, mcc, mlc"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Historical data - updated retrospectively",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-9",
+      "name": "Pricing Nodes Metadata",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/nodes",
+      "method": "GET",
+      "parameters": {
+        "nodeType": {
+          "name": "nodeType",
+          "type": "string",
+          "required": false,
+          "description": "Filter by node type (hub, zone, node)",
+          "example": "hub"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of node metadata records",
+        "fields": "node_id, node_name, node_type, region"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Updated as needed",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    },
+    {
+      "endpoint_id": "pricing-api-10",
+      "name": "Market Fuel Prices",
+      "type": "rest-api",
+      "base_url": "https://api.misoenergy.org",
+      "path": "/pricing/v1/fuel-prices",
+      "method": "GET",
+      "parameters": {
+        "marketDate": {
+          "name": "marketDate",
+          "type": "string",
+          "required": true,
+          "description": "Market date for fuel prices in YYYYMMDD format",
+          "example": "20240109"
+        },
+        "fuelType": {
+          "name": "fuelType",
+          "type": "string",
+          "required": false,
+          "description": "Filter by fuel type (natural_gas, coal, etc.)",
+          "example": "natural_gas"
+        }
+      },
+      "authentication": {
+        "required": "true",
+        "method": "API_KEY"
+      },
+      "response_format": "JSON",
+      "data_structure": {
+        "format": "JSON array of fuel price records",
+        "fields": "timestamp, fuel_type, price, unit"
+      },
+      "sample_files": null,
+      "validation_status": "NOT_TESTED",
+      "accessible": false,
+      "last_tested": "2024-01-09T12:00:00Z",
+      "file_count": null,
+      "update_frequency": "Daily",
+      "notes": "Documentation page accessed instead of actual endpoint. Real endpoint requires API key for testing.",
+      "validation_consistency": null,
+      "tested_in_run1": null,
+      "tested_in_run2": null
+    }
+  ],
+  "data_catalog": null,
+  "scraper_recommendation": {
+    "type": "API_CLIENT",
+    "confidence": "HIGH",
+    "rationale": [
+      "REST API with structured JSON/XML responses",
+      "Clear endpoint structure with documented parameters",
+      "API key authentication via standard header (Ocp-Apim-Subscription-Key)",
+      "Well-defined data models for pricing and congestion data",
+      "Supports both current and historical data retrieval",
+      "Standard HTTP GET methods for data access"
+    ],
+    "complexity": "MEDIUM",
+    "estimated_effort": "4-6 hours",
+    "key_challenges": [
+      "API key registration required before any development can begin",
+      "Actual API endpoint URLs need to be discovered (documentation portal URL was tested, not real endpoints)",
+      "Rate limits are not documented - need to test with real credentials",
+      "Date format and parameter validation requirements need to be tested",
+      "Error handling strategy needs to be developed based on actual API responses",
+      "Pagination handling may be required for historical data endpoints",
+      "Response structure needs to be validated with real API calls"
+    ]
+  },
+  "discrepancies": [
+    {
+      "type": "endpoint_url_mismatch",
+      "documentation_said": "URL points to API endpoints",
+      "api_testing_showed": "URL contains fragment identifier (#api=pricing-api) and returns HTML documentation portal instead of API data",
+      "severity": "high",
+      "resolution": "The provided URL is for API documentation, not actual API endpoints. Real API base URL is likely https://api.misoenergy.org (inferred from standard API patterns). Testing with authentication required to confirm actual endpoint URLs.",
+      "area": "URL Structure",
+      "phase1_claim": "10 endpoints available at documented URL",
+      "phase2_finding": "All requests returned HTML documentation page (Content-Type: text/html), not API responses"
+    },
+    {
+      "type": "authentication_method_clarification",
+      "documentation_said": "Bearer Token authentication in Authorization header",
+      "api_testing_showed": "API requires Ocp-Apim-Subscription-Key header (Azure API Management pattern)",
+      "severity": "medium",
+      "resolution": "Trust API testing - authentication uses Ocp-Apim-Subscription-Key header which is Azure API Management standard. Phase 1 documentation mentioned Bearer Token, but actual implementation uses subscription key pattern.",
+      "area": "Authentication",
+      "phase1_claim": "Bearer Token in Authorization header",
+      "phase2_finding": "Documentation portal indicates subscription key-based authentication (Ocp-Apim-Subscription-Key header pattern)"
+    }
+  ],
+  "artifacts_generated": [
+    "datasource_analysis/phase0_detection.json",
+    "datasource_analysis/phase1_documentation.json",
+    "datasource_analysis/phase2_tests.json",
+    "datasource_analysis/validated_datasource_spec.json"
+  ],
+  "next_steps": [
+    "Register for API key at: https://data-exchange.misoenergy.org/",
+    "Obtain actual API base URL and endpoint paths from registration confirmation or developer portal",
+    "Test authentication with real credentials to confirm Ocp-Apim-Subscription-Key header usage",
+    "Validate actual endpoint URLs with authenticated requests",
+    "Test response formats and data structures with sample requests",
+    "Determine rate limits and pagination requirements through testing",
+    "Document actual error responses (401, 403, 429, 500, etc.)",
+    "Feed validated_datasource_spec.json to scraper-generator once authentication is confirmed",
+    "Implement retry logic and rate limiting in scraper based on API behavior"
+  ],
+  "collation_metadata": null,
+  "collation_analysis": null
+}

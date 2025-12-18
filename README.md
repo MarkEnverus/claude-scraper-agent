@@ -205,34 +205,38 @@ echo '{
 
 **Scenario 1: Modern API documentation portal**
 ```
-/analyze-api https://data-exchange.misoenergy.org/api-details#api=pricing-api
+/scraper-dev:analyze https://data-exchange.misoenergy.org/api-details#api=pricing-api
 
-→ ba-enhanced agent launches
-→ Detects JS-heavy site
-→ Uses browser automation
-→ Extracts full API documentation
-→ Returns JIRA-ready specification
+→ Python CLI analyzer launches
+→ Botasaurus handles JavaScript rendering
+→ Phase 0: Detects API type (95% confidence)
+→ Phase 1: Extracts 10 endpoints with parameters
+→ Phase 2: Tests endpoints (finds auth required)
+→ Phase 3: Validates and cross-checks
+→ Returns validated_datasource_spec.json
 ```
 
-**Scenario 2: Static documentation**
+**Scenario 2: REST API with OpenAPI docs**
 ```
-/analyze-api https://api.example.com/docs
+/scraper-dev:analyze https://api.example.com/docs
 
-→ ba-enhanced agent launches
-→ Uses WebFetch (fast)
-→ Extracts documentation
-→ Returns specification
+→ Python CLI analyzer launches
+→ Botasaurus extracts full documentation
+→ Phase 0: Discovers endpoints from OpenAPI spec
+→ Phase 1: Documents all parameters and auth
+→ Phase 2: Live tests confirm accessibility
+→ Returns complete specification in 15-20 seconds
 ```
 
-**Scenario 3: Browser tools not configured**
+**Scenario 3: Type-safe results**
 ```
-/analyze-api https://js-heavy-site.com/docs
-
-→ ba-enhanced agent launches
-→ Tries WebFetch, gets minimal content
-→ Checks for browser tools - not available
-→ Provides setup instructions for MCP Puppeteer
-→ Offers workaround: copy/paste from browser
+Every analysis produces:
+→ datasource_analysis/validated_datasource_spec.json
+→ Type-safe Pydantic models (BAML-generated)
+→ Cross-validated against live testing
+→ Discrepancies identified and resolved
+→ Confidence scoring (0.0-1.0)
+→ Scraper recommendation with complexity estimate
 ```
 
 ### Integration with Scraper Generator

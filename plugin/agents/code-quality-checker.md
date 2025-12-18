@@ -658,8 +658,6 @@ Manual intervention required. Review:
 
 ## Anti-Hallucination Safeguards
 
-Following the pattern from `ba-enhanced.md`:
-
 ### Mandatory File Operations
 
 **Rule 1:** MUST save all command outputs to files
