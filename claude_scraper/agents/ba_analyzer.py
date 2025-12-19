@@ -5,12 +5,9 @@ data sources (APIs, FTP, websites, email) using BAML-generated types.
 
 Example:
     >>> from claude_scraper.agents.ba_analyzer import BAAnalyzer
-    >>> from claude_scraper.tools import WebFetchTool, PuppeteerTool
+    >>> from claude_scraper.tools.botasaurus_tool import BotasaurusTool
     >>>
-    >>> analyzer = BAAnalyzer(
-    ...     web_fetch=WebFetchTool(),
-    ...     puppeteer=PuppeteerTool()
-    ... )
+    >>> analyzer = BAAnalyzer(botasaurus=BotasaurusTool())
     >>> spec = await analyzer.run_full_analysis("https://api.example.com")
 """
 
