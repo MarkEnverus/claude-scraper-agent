@@ -127,7 +127,7 @@ class ValidationStatus(str, Enum):
     NOT_TESTED = "NOT_TESTED"
 
 # #########################################################################
-# Generated classes (30)
+# Generated classes (32)
 # #########################################################################
 
 class AccessRequirements(BaseModel):
@@ -294,6 +294,11 @@ class FileMetadataVerification(BaseModel):
     content_types_match: bool
     last_modified_dates_available: bool
 
+class GeneratedCode(BaseModel):
+    code: str
+    imports: typing.List[str]
+    notes: str
+
 class Parameter(BaseModel):
     name: str
     type: str
@@ -399,6 +404,12 @@ class ValidationResult(BaseModel):
     identified_gaps: typing.List[str]
     recommendations: typing.List[str]
     validation_notes: str
+
+class ValidationRules(BaseModel):
+    required_fields: typing.List[str]
+    format_checks: typing.List[str]
+    range_checks: typing.List[str]
+    custom_logic: str
 
 class ValidationSummary(BaseModel):
     phases_completed: typing.List[str]

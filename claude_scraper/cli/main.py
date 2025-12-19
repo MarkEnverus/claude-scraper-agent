@@ -337,42 +337,452 @@ async def run_analysis(url: str, output_dir: str, debug: bool) -> None:
 
 @cli.command()
 @click.option(
-    "--mode",
-    type=click.Choice(["analyze", "generate"]),
-    required=True,
-    help="Mode to run: analyze data source or generate scraper",
+    "--ba-spec-file",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Path to validated BA spec JSON (datasource_analysis/validated_datasource_spec.json)",
 )
-@click.option("--url", help="Data source URL to analyze")
 @click.option(
-    "--provider",
-    type=click.Choice(["bedrock", "anthropic"]),
-    default="bedrock",
-    help="LLM provider to use (default: bedrock)",
+    "--url",
+    help="Source URL to analyze (triggers BA Analyzer)",
 )
-@click.option("--debug", is_flag=True, help="Enable debug mode")
-def run(mode: str, url: str | None, provider: str, debug: bool) -> None:
-    """[DEPRECATED] Run data source analysis or scraper generation.
+@click.option(
+    "--output-dir",
+    type=click.Path(path_type=Path),
+    help="Output directory for generated scraper (default: ./generated_scrapers/{source_snake}/)",
+)
+@click.option(
+    "--no-ai",
+    is_flag=True,
+    help="Skip AI code generation (use placeholder comments)",
+)
+@click.option("--debug", is_flag=True, help="Enable debug logging")
+def generate(
+    ba_spec_file: Path | None,
+    url: str | None,
+    output_dir: Path | None,
+    no_ai: bool,
+    debug: bool,
+) -> None:
+    """Generate scraper from BA spec or URL.
 
-    This command is deprecated. Use 'analyze' or 'generate' commands instead:
-    - claude-scraper analyze --url <url>
-    - claude-scraper generate (coming soon)
+    Two input modes:
+    1. BA spec file: claude-scraper generate --ba-spec-file path/to/spec.json
+    2. Source URL: claude-scraper generate --url https://api.example.com
+
+    Examples:
+        # Use existing BA spec
+        claude-scraper generate --ba-spec-file datasource_analysis/validated_datasource_spec.json
+
+        # Analyze URL first, then generate
+        claude-scraper generate --url https://api.example.com --output-dir my_scraper
+
+        # Skip AI code generation (faster, for testing)
+        claude-scraper generate --ba-spec-file spec.json --no-ai
     """
-    console.print(
-        "[yellow]Warning: 'run' command is deprecated. "
-        "Use 'analyze' or 'generate' commands instead.[/yellow]\n"
-    )
+    try:
+        # Validate input
+        if not ba_spec_file and not url:
+            console.print("[bold red]Error:[/bold red] Must provide either --ba-spec-file or --url")
+            raise click.Abort()
 
-    if mode == "analyze":
-        # Redirect to analyze command
-        from click.testing import CliRunner
-        runner = CliRunner()
-        args = ["analyze", "--url", url or "", "--provider", provider]
+        if ba_spec_file and url:
+            console.print("[bold red]Error:[/bold red] Cannot provide both --ba-spec-file and --url")
+            raise click.Abort()
+
+        # Setup logging
+        log_level = logging.DEBUG if debug else logging.INFO
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stderr)],
+        )
+
+        # Initialize orchestrator
+        from claude_scraper.generators.orchestrator import (
+            ScraperOrchestrator,
+            BAAnalysisError,
+            GenerationError,
+        )
+
+        orchestrator = ScraperOrchestrator()
+
+        requires_ai = not no_ai
+
+        # Execute based on input mode
+        if ba_spec_file:
+            # Mode 1: Use existing BA spec
+            console.print(f"\n[bold cyan]Loading BA spec:[/bold cyan] {ba_spec_file}\n")
+
+            result = asyncio.run(
+                orchestrator.generate_from_spec(
+                    ba_spec_file=ba_spec_file,
+                    output_dir=output_dir,
+                    requires_ai=requires_ai,
+                )
+            )
+
+        else:  # url
+            # Mode 2: Analyze URL first
+            console.print(f"\n[bold cyan]Analyzing URL:[/bold cyan] {url}\n")
+            console.print("[yellow]Running BA Analyzer (this may take 5-10 minutes)...[/yellow]\n")
+
+            result = asyncio.run(
+                orchestrator.generate_from_url(
+                    url=url,
+                    output_dir=output_dir,
+                    requires_ai=requires_ai,
+                )
+            )
+
+            console.print(f"\n[bold green]BA Analysis complete:[/bold green]")
+            console.print(f"  Source type: {result.source_type}")
+            console.print(f"  Confidence: {result.confidence_score:.2f}")
+            console.print(f"  BA spec saved: {result.ba_spec_path}\n")
+
+        # Display results
+        console.print(f"\n[bold green]✓ Scraper generation complete![/bold green]\n")
+        console.print(f"[bold]Generated files:[/bold]")
+        console.print(f"  Scraper: {result.generated_files.scraper_path}")
+        console.print(f"  Tests: {result.generated_files.test_path}")
+        console.print(f"  README: {result.generated_files.readme_path}")
+
+        console.print(f"\n[bold]Metadata:[/bold]")
+        console.print(f"  Source: {result.generated_files.metadata['source']}")
+        console.print(f"  Data type: {result.generated_files.metadata['data_type']}")
+        console.print(f"  Collection method: {result.generated_files.metadata['collection_method']}")
+        console.print(f"  AI generated: {result.generated_files.metadata['ai_generated']}")
+
+        console.print(f"\n[bold green]Next steps:[/bold green]")
+        console.print(f"1. Review generated scraper: {result.generated_files.scraper_path}")
+        console.print(f"2. Run tests: pytest {result.generated_files.test_path}")
+        console.print(f"3. Configure credentials if needed (see README)")
+
+    except (BAAnalysisError, GenerationError) as e:
+        console.print(f"\n[bold red]Generation failed:[/bold red] {e}")
         if debug:
-            args.append("--debug")
-        result = runner.invoke(cli, args, catch_exceptions=False)
-        sys.exit(result.exit_code)
-    else:
-        console.print("[red]Error: 'generate' mode not yet implemented[/red]")
+            console.print_exception()
+        raise click.Abort()
+    except ValueError as e:
+        console.print(f"\n[bold red]Validation Error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
+        raise click.Abort()
+    except Exception as e:
+        console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
+        raise click.Abort()
+
+
+@cli.command()
+@click.option(
+    "--scraper-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default="sourcing/scraping",
+    help="Root directory containing scrapers (default: sourcing/scraping)",
+)
+@click.option(
+    "--scraper",
+    type=click.Path(exists=True, dir_okay=False, path_type=Path),
+    help="Specific scraper file to fix (if not provided, will prompt for selection)",
+)
+@click.option(
+    "--validate/--no-validate",
+    default=True,
+    help="Run QA validation after applying fix (default: enabled)",
+)
+@click.option("--debug", is_flag=True, help="Enable debug logging")
+def fix(
+    scraper_root: Path,
+    scraper: Path | None,
+    validate: bool,
+    debug: bool,
+) -> None:
+    """Fix issues in an existing scraper.
+
+    This command:
+    1. Scans for scrapers (or uses --scraper path)
+    2. Prompts for issue description
+    3. Applies fixes with string replacement operations
+    4. Updates timestamps
+    5. Runs QA validation (optional)
+
+    Examples:
+        # Interactive mode - select scraper from list
+        claude-scraper fix
+
+        # Fix specific scraper
+        claude-scraper fix --scraper sourcing/scraping/scraper_miso_http.py
+
+        # Skip validation
+        claude-scraper fix --scraper scraper_miso.py --no-validate
+    """
+    try:
+        # Setup logging
+        log_level = logging.DEBUG if debug else logging.INFO
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stderr)],
+        )
+
+        from claude_scraper.fixers.fixer import ScraperFixer
+
+        fixer = ScraperFixer(scraper_root=str(scraper_root))
+
+        console.print("\n[bold cyan]Scraper Fixer[/bold cyan]\n")
+
+        # Step 1: Get scraper to fix
+        if not scraper:
+            # Scan and prompt for selection
+            console.print("[cyan]Scanning for scrapers...[/cyan]")
+            scrapers = fixer.scan_scrapers()
+
+            if not scrapers:
+                console.print(f"[bold red]No scrapers found in {scraper_root}[/bold red]")
+                raise click.Abort()
+
+            console.print(f"\n[green]Found {len(scrapers)} scrapers:[/green]")
+            for i, s in enumerate(scrapers, 1):
+                console.print(f"  {i}. {s.name}")
+
+            selection = click.prompt("\nSelect scraper number", type=int)
+            if selection < 1 or selection > len(scrapers):
+                console.print("[bold red]Invalid selection[/bold red]")
+                raise click.Abort()
+
+            scraper = scrapers[selection - 1]
+
+        console.print(f"\n[bold]Selected scraper:[/bold] {scraper.name}")
+
+        # Step 2: Get problem description
+        problem = click.prompt("\nDescribe the problem", type=str)
+
+        # Step 3: Get fix operations
+        console.print("\n[yellow]Enter fix operations (one per line).[/yellow]")
+        console.print("[dim]Format: OLD_STRING -> NEW_STRING[/dim]")
+        console.print("[dim]Press Enter twice when done.[/dim]\n")
+
+        fix_operations = []
+        while True:
+            line = click.prompt("", default="", show_default=False)
+            if not line:
+                break
+
+            if "->" not in line:
+                console.print("[red]Invalid format. Use: OLD_STRING -> NEW_STRING[/red]")
+                continue
+
+            old, new = line.split("->", 1)
+            fix_operations.append({
+                "file": str(scraper),
+                "old": old.strip(),
+                "new": new.strip(),
+            })
+
+        if not fix_operations:
+            console.print("[yellow]No fix operations provided. Aborting.[/yellow]")
+            raise click.Abort()
+
+        # Step 4: Apply fixes
+        console.print(f"\n[cyan]Applying {len(fix_operations)} fix operations...[/cyan]")
+
+        result = asyncio.run(
+            fixer.fix_scraper(
+                scraper_path=scraper,
+                problem=problem,
+                fix_operations=fix_operations,
+                validate=validate,
+            )
+        )
+
+        # Display results
+        console.print(f"\n[bold green]✓ Fix applied successfully![/bold green]\n")
+        console.print(f"[bold]Problem:[/bold] {result.problem_description}")
+        console.print(f"[bold]Fix:[/bold] {result.fix_description}")
+        console.print(f"[bold]Files modified:[/bold] {len(result.files_modified)}")
+        for file in result.files_modified:
+            console.print(f"  - {file}")
+
+        if validate:
+            if result.validation_passed:
+                console.print(f"\n[bold green]✓ QA Validation: PASSED[/bold green]")
+                if result.validation_fixes_applied > 0:
+                    console.print(f"  Auto-fixes applied: {result.validation_fixes_applied}")
+            else:
+                console.print(f"\n[bold yellow]⚠ QA Validation: INCOMPLETE[/bold yellow]")
+                console.print("  Manual review required")
+
+    except ValueError as e:
+        console.print(f"\n[bold red]Error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
+        raise click.Abort()
+    except Exception as e:
+        console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
+        raise click.Abort()
+
+
+@cli.command()
+@click.option(
+    "--mode",
+    type=click.Choice(["scan", "auto"]),
+    default="scan",
+    help="Mode: scan (report only) or auto (update scrapers)",
+)
+@click.option(
+    "--scraper-root",
+    type=click.Path(exists=True, file_okay=False, path_type=Path),
+    default="sourcing/scraping",
+    help="Root directory containing scrapers (default: sourcing/scraping)",
+)
+@click.option(
+    "--validate/--no-validate",
+    default=True,
+    help="Run QA validation after updates (default: enabled)",
+)
+@click.option(
+    "--non-interactive",
+    is_flag=True,
+    help="Non-interactive mode: update all without prompts",
+)
+@click.option("--debug", is_flag=True, help="Enable debug logging")
+def update(
+    mode: str,
+    scraper_root: Path,
+    validate: bool,
+    non_interactive: bool,
+    debug: bool,
+) -> None:
+    """Update scrapers to current infrastructure version.
+
+    This command:
+    1. Scans scrapers and detects versions
+    2. Identifies outdated scrapers (< v1.6.0)
+    3. Detects generator agent for each scraper
+    4. Regenerates scrapers with current infrastructure
+    5. Runs QA validation
+
+    Two modes:
+    - scan: Generate report, don't update
+    - auto: Interactively update scrapers (or all if --non-interactive)
+
+    Examples:
+        # Scan and report only
+        claude-scraper update --mode scan
+
+        # Interactive update (select which scrapers)
+        claude-scraper update --mode auto
+
+        # Non-interactive update (all outdated)
+        claude-scraper update --mode auto --non-interactive
+
+        # Skip validation
+        claude-scraper update --mode auto --no-validate
+    """
+    try:
+        # Setup logging
+        log_level = logging.DEBUG if debug else logging.INFO
+        logging.basicConfig(
+            level=log_level,
+            format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+            handlers=[logging.StreamHandler(sys.stderr)],
+        )
+
+        from claude_scraper.fixers.updater import ScraperUpdater, CURRENT_INFRASTRUCTURE_VERSION
+
+        updater = ScraperUpdater(scraper_root=str(scraper_root))
+
+        console.print("\n[bold cyan]Scraper Updater[/bold cyan]\n")
+        console.print(f"[dim]Current infrastructure version: {CURRENT_INFRASTRUCTURE_VERSION}[/dim]\n")
+
+        # Step 1: Scan scrapers
+        console.print("[cyan]Scanning scrapers...[/cyan]")
+        scrapers = updater.scan_scrapers()
+
+        if not scrapers:
+            console.print(f"[bold red]No scrapers found in {scraper_root}[/bold red]")
+            raise click.Abort()
+
+        # Filter outdated
+        outdated = [s for s in scrapers if s.needs_update]
+
+        if mode == "scan":
+            # Scan mode: Generate report
+            report = updater.generate_scan_report(scrapers)
+            console.print(report)
+            return
+
+        # Auto mode: Update scrapers
+        if not outdated:
+            console.print("[green]All scrapers are up-to-date![/green]")
+            return
+
+        console.print(f"[yellow]Found {len(outdated)} outdated scrapers[/yellow]\n")
+
+        # Select scrapers to update
+        if non_interactive:
+            # Update all
+            to_update = outdated
+            console.print("[dim]Non-interactive mode: updating all outdated scrapers[/dim]\n")
+        else:
+            # Interactive selection
+            console.print("[bold]Outdated scrapers:[/bold]")
+            for i, scraper in enumerate(outdated, 1):
+                version = scraper.current_version or "UNKNOWN"
+                console.print(f"  {i}. {scraper.path.name} (v{version})")
+
+            console.print("\n[dim]Enter numbers separated by commas (e.g., 1,3,4) or 'all'[/dim]")
+            selection = click.prompt("Select scrapers to update", type=str, default="all")
+
+            if selection.lower() == "all":
+                to_update = outdated
+            else:
+                indices = [int(x.strip()) - 1 for x in selection.split(",")]
+                to_update = [outdated[i] for i in indices if 0 <= i < len(outdated)]
+
+        if not to_update:
+            console.print("[yellow]No scrapers selected[/yellow]")
+            return
+
+        # Update each scraper
+        console.print(f"\n[cyan]Updating {len(to_update)} scrapers...[/cyan]\n")
+        results = []
+
+        for scraper_info in to_update:
+            console.print(f"[bold]Updating:[/bold] {scraper_info.path.name}")
+
+            result = asyncio.run(
+                updater.update_scraper(scraper_info, validate=validate)
+            )
+            results.append(result)
+
+            if result.error:
+                console.print(f"  [red]✗ Failed: {result.error}[/red]")
+            elif result.validation_passed:
+                console.print(f"  [green]✓ Updated and validated[/green]")
+            else:
+                console.print(f"  [yellow]⚠ Updated but needs review[/yellow]")
+
+        # Generate report
+        console.print()
+        report = updater.generate_update_report(
+            results,
+            mode="non-interactive" if non_interactive else "interactive",
+        )
+        console.print(report)
+
+    except ValueError as e:
+        console.print(f"\n[bold red]Error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
+        raise click.Abort()
+    except Exception as e:
+        console.print(f"\n[bold red]Unexpected error:[/bold red] {e}")
+        if debug:
+            console.print_exception()
         raise click.Abort()
 
 

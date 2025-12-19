@@ -23,7 +23,7 @@ class StreamState(BaseModel, typing.Generic[StreamStateValueT]):
     value: StreamStateValueT
     state: typing_extensions.Literal["Pending", "Incomplete", "Complete"]
 # #########################################################################
-# Generated classes (30)
+# Generated classes (32)
 # #########################################################################
 
 class AccessRequirements(BaseModel):
@@ -190,6 +190,11 @@ class FileMetadataVerification(BaseModel):
     content_types_match: typing.Optional[bool] = None
     last_modified_dates_available: typing.Optional[bool] = None
 
+class GeneratedCode(BaseModel):
+    code: typing.Optional[str] = None
+    imports: typing.List[str]
+    notes: typing.Optional[str] = None
+
 class Parameter(BaseModel):
     name: typing.Optional[str] = None
     type: typing.Optional[str] = None
@@ -295,6 +300,12 @@ class ValidationResult(BaseModel):
     identified_gaps: typing.List[str]
     recommendations: typing.List[str]
     validation_notes: typing.Optional[str] = None
+
+class ValidationRules(BaseModel):
+    required_fields: typing.List[str]
+    format_checks: typing.List[str]
+    range_checks: typing.List[str]
+    custom_logic: typing.Optional[str] = None
 
 class ValidationSummary(BaseModel):
     phases_completed: typing.List[str]

@@ -1,155 +1,294 @@
-# Claude Scraper Agent v1.13.0
+# Claude Scraper Agent v2.0.0
 
-Automated scraper generation system for data collection pipelines using Claude Code. Generates type-safe, quality-checked scrapers with tabbed question interface, version tracking, and maintenance tools.
+**Type-safe scraper generation with Python CLI, LangGraph, and BAML**
 
-**Latest Updates (v1.13.0):**
-- BA Agent v2.2.0: CRITICAL - Explicit tool usage enforcement (no pseudo-code), absolute hallucination prohibition, working directory awareness
+Generate, fix, and update production-ready Python scrapers for HTTP APIs, FTP, Email, and Websites using AI-powered analysis and hybrid template generation.
+
+**Latest Updates (v2.0.0):**
+- ✅ **Migrated to Python CLI** - Clean architecture with Click, LangGraph, Pydantic
+- ✅ **Hybrid Generation** - Jinja2 templates + AI for complex logic
+- ✅ **471 Tests Passing** - 85%+ coverage with comprehensive test suite
+- ✅ **CLI Utilities** - Retry logic, error handling, progress bars
+- ✅ **Enhanced Documentation** - Complete guides and examples
+
+**⚠️ Migration Note:** If you're using the old plugin-based system (v1.x), see [MIGRATION_SCRAPER_AGENTS.md](MIGRATION_SCRAPER_AGENTS.md) for upgrade instructions.
 
 ## Overview
 
-This project contains:
-- **Infrastructure Code**: Base classes for Redis hash registry, JSON logging, Kafka notifications, and collection framework
-- **Claude Code Plugin**: Agents that generate production-ready scrapers
-- **Tests**: Unit tests for infrastructure components
-- **Examples**: Sample generated scrapers
-- **Documentation**: Usage guides and API references
+**Claude Scraper Agent** is a comprehensive CLI tool for generating, maintaining, and updating production-ready data scrapers. It combines:
+
+- **🎯 Smart Analysis**: AI-powered data source analysis with 4-phase validation
+- **🔧 Hybrid Generation**: Jinja2 templates + AI for complex logic
+- **🏗️ Clean Architecture**: Pydantic types, LangGraph orchestration, modular design
+- **✅ Quality First**: 519 tests, 85%+ coverage, mypy + ruff validation
+- **🔄 Maintenance Tools**: Fix and update existing scrapers automatically
+- **📊 Rich CLI**: Interactive workflows with progress indication
+
+### Key Components
+
+- **CLI (`claude_scraper/cli/`)**: Click-based commands (analyze, generate, fix, update)
+- **Types (`claude_scraper/types/`)**: Pydantic type system with validation
+- **Generators (`claude_scraper/generators/`)**: Hybrid template + AI code generation
+- **Templates (`claude_scraper/templates/`)**: Jinja2 templates for scrapers
+- **Orchestration (`claude_scraper/orchestration/`)**: LangGraph pipelines
+- **Fixers (`claude_scraper/fixers/`)**: Diagnosis and repair tools
+- **Infrastructure**: Base classes for collection framework
 
 ## Project Structure
 
 ```
 claude_scraper_agent/
-├── infrastructure/          # Base classes to be copied to sourcing project
+├── claude_scraper/          # Main package
+│   ├── cli/                 # Click-based CLI
+│   │   ├── main.py         # Commands: analyze, generate, fix, update
+│   │   ├── config.py       # Configuration management
+│   │   └── utils.py        # Error handling, retry logic
+│   ├── types/              # Pydantic type system
+│   │   ├── base.py         # Base models
+│   │   ├── enums.py        # Enums with display names
+│   │   ├── scraper_spec.py # Method-specific configs
+│   │   └── validators.py   # Business logic validators
+│   ├── generators/         # Code generation
+│   │   ├── hybrid_generator.py
+│   │   ├── template_renderer.py
+│   │   └── variable_transformer.py
+│   ├── templates/          # Jinja2 templates
+│   │   ├── scraper_main.py.j2
+│   │   ├── scraper_tests.py.j2
+│   │   └── scraper_readme.md.j2
+│   ├── orchestration/      # LangGraph pipelines
+│   │   ├── pipeline.py
+│   │   └── nodes.py
+│   ├── fixers/             # Maintenance tools
+│   │   ├── fixer.py        # Diagnosis and repair
+│   │   └── updater.py      # Version migration
+│   └── llm/                # LLM providers (Bedrock/Anthropic)
+├── infrastructure/         # Base collection framework
+│   ├── collection_framework.py
 │   ├── hash_registry.py
 │   ├── logging_json.py
-│   ├── kafka_utils.py
-│   └── collection_framework.py
-├── plugin/                  # Claude Code plugin
-│   ├── plugin.json
-│   ├── agents/
-│   ├── commands/
-│   └── skills/
-├── tests/                   # Unit tests
-├── examples/                # Example generated scrapers
-└── docs/                    # Documentation
+│   └── kafka_utils.py
+├── tests/                  # 519 tests (85%+ coverage)
+├── baml_src/              # BAML type definitions
+└── docs/                   # Documentation
 ```
 
 ## Installation
 
-### Method 1: Install from Marketplace (Recommended)
+### Prerequisites
 
-Install the Claude Code plugin directly from the marketplace:
+- Python 3.10+
+- `uv` package manager (recommended) or `pip`
+- AWS credentials (for Bedrock) or Anthropic API key
+
+### Install with uv (Recommended)
 
 ```bash
-# Add the marketplace
-claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
+# Clone repository
+git clone https://github.com/your-org/claude-scraper-agent.git
+cd claude_scraper_agent
 
-# Install the plugin
-claude plugin install scraper-dev@scraper-agent-marketplace
+# Create virtual environment and install
+uv sync
+
+# Verify installation
+uv run claude-scraper --help
 ```
 
-**That's it!** Infrastructure files are automatically installed when you first run `/create-scraper`.
-
-### Method 2: Install via GitHub URL
-
-Install directly from the GitHub repository:
+### Install with pip
 
 ```bash
-# Add the GitHub repository as a marketplace
-claude plugin marketplace add https://github.com/MarkEnverus/claude-scraper-agent
+# Clone repository
+git clone https://github.com/your-org/claude-scraper-agent.git
+cd claude_scraper_agent
 
-# Install the plugin
-claude plugin install scraper-dev@scraper-agent-marketplace
+# Install in development mode
+pip install -e ".[dev]"
+
+# Verify installation
+claude-scraper --help
+```
+
+### Environment Setup
+
+```bash
+# For Bedrock (default provider)
+export AWS_ACCESS_KEY_ID=<your-key>
+export AWS_SECRET_ACCESS_KEY=<your-secret>
+export AWS_DEFAULT_REGION=us-west-2
+
+# For Anthropic provider
+export ANTHROPIC_API_KEY=<your-api-key>
+
+# Optional: Custom output directory
+export SCRAPER_OUTPUT_DIR=custom/output/path
 ```
 
 ### Verify Installation
 
-1. **Restart Claude Code** (close and reopen terminal)
-2. Type `/create-scraper` - command should autocomplete
-3. If available, the plugin is installed correctly
+```bash
+# Check version
+claude-scraper --version
 
-For detailed installation instructions and troubleshooting, see [INSTALLATION.md](INSTALLATION.md).
+# Show available commands
+claude-scraper --help
+
+# Test analyze command
+claude-scraper analyze --help
+```
 
 ## Usage
 
-### Generate a New Scraper
+### Quick Reference
 
 ```bash
-# In Claude Code
-/create-scraper
+# Analyze a data source
+claude-scraper analyze --url https://api.example.com/docs
+
+# Generate scraper from analysis
+claude-scraper generate --ba-spec validated_datasource_spec.json
+
+# Fix an existing scraper
+claude-scraper fix
+
+# Update scrapers to new infrastructure
+claude-scraper update --mode scan
 ```
 
-The agent will interview you about:
-- Data source name
-- Data type
-- Collection method (HTTP API, Website, FTP, etc.)
-- Authentication requirements
-- Update frequency
+### 1. Analyze a Data Source
 
-### Fix an Existing Scraper
+Analyze API documentation or data sources to generate validated specifications:
 
 ```bash
-# In Claude Code
-/fix-scraper
+# Basic usage
+claude-scraper analyze --url https://api.misoenergy.org/docs
+
+# Use Anthropic provider
+claude-scraper analyze --url https://api.example.com --provider anthropic
+
+# Custom output directory
+claude-scraper analyze --url https://api.example.com --output-dir custom/path
+
+# Enable debug logging
+claude-scraper analyze --url https://api.example.com --debug
 ```
 
-Use this when a scraper stops working due to:
-- API endpoint changes
-- Data format changes
-- Authentication updates
-- Import errors
-- Any other code issues
+**Output:** `datasource_analysis/validated_datasource_spec.json`
 
-The agent will:
-1. Scan for existing scrapers
-2. Let you select which one to fix
-3. Diagnose the problem
-4. Propose and apply fixes
+### 2. Generate a Scraper
 
-### Update Scrapers to New Infrastructure
+Generate production-ready scrapers from BA specifications or URLs:
 
 ```bash
-# Scan mode (just report what needs updating)
-/update-scraper
-/update-scraper --mode=scan
+# From BA spec (after analyze)
+claude-scraper generate --ba-spec validated_datasource_spec.json
 
-# Auto mode (propose and apply updates)
-/update-scraper --mode=auto
+# From URL (runs analysis first, then generates)
+claude-scraper generate --url https://api.example.com/docs
+
+# Custom output directory
+claude-scraper generate --ba-spec spec.json --output-dir custom/scrapers
+
+# With debug logging
+claude-scraper generate --ba-spec spec.json --debug
 ```
 
-Use this when infrastructure is updated to:
-- Sync scrapers with new framework versions
-- Add missing features (e.g., Kafka support)
-- Update imports after refactoring
-- Apply bug fixes and improvements
+**Output:** Complete scraper with tests, fixtures, and documentation
 
-The agent will:
-1. Scan all scrapers for version information
-2. Report which scrapers need updates
-3. (In auto mode) Propose updates and apply with approval
-4. Preserve all custom business logic
+### 3. Fix an Existing Scraper
 
-### Example Workflow
+Diagnose and repair issues in existing scrapers:
 
+```bash
+# Interactive mode - select from list
+claude-scraper fix
+
+# Fix specific scraper
+claude-scraper fix --scraper sourcing/scraping/scraper_miso_http.py
+
+# Custom scraper root
+claude-scraper fix --scraper-root custom/path
+
+# Skip validation
+claude-scraper fix --no-validate
+
+# Debug mode
+claude-scraper fix --debug
 ```
-User: /create-scraper
 
-Agent: I'll help you create a new scraper. Let me gather some information...
+**Interactive Workflow:**
+1. Scans for scrapers in `sourcing/scraping/`
+2. Prompts for scraper selection
+3. Asks for problem description
+4. Collects fix operations (OLD -> NEW format)
+5. Applies fixes and updates timestamps
+6. Runs QA validation
 
-1. Data Source Name: NYISO
-2. Data Type: hourly_load
-3. Collection Method: HTTP REST API
-4. Data Format: JSON
-5. Update Frequency: hourly
-6. Historical Support: Yes
-7. Authentication: API Key
+### 4. Update Scrapers to New Infrastructure
 
-Agent: [Generates complete scraper with tests and documentation]
+Migrate scrapers to the current infrastructure version (v1.6.0):
+
+```bash
+# Scan mode - report only
+claude-scraper update --mode scan
+
+# Auto mode - interactive updates
+claude-scraper update --mode auto
+
+# Non-interactive - update all
+claude-scraper update --mode auto --non-interactive
+
+# Custom scraper root
+claude-scraper update --mode auto --scraper-root custom/path
+
+# Skip validation
+claude-scraper update --mode auto --no-validate
+
+# Debug mode
+claude-scraper update --mode scan --debug
+```
+
+**Update Process:**
+1. Scans all scrapers for version info
+2. Identifies outdated scrapers (< v1.6.0)
+3. Detects generator agent for each scraper (4 methods)
+4. Regenerates with current infrastructure
+5. Runs QA validation
+
+### Example: Complete Workflow
+
+```bash
+# Step 1: Analyze API documentation
+$ claude-scraper analyze --url https://api.misoenergy.org/docs
+
+Scraper Analysis Pipeline
+
+Phase 0: Detection → 95% confidence (HTTP_REST_API)
+Phase 1: Documentation → 10 endpoints found
+Phase 2: Testing → 8/10 endpoints accessible
+Phase 3: Validation → Cross-check complete
+
+✓ Analysis complete!
+Output: datasource_analysis/validated_datasource_spec.json
+
+# Step 2: Generate scraper
+$ claude-scraper generate --ba-spec datasource_analysis/validated_datasource_spec.json
+
+Scraper Generation
+
+Transform BA spec → Template variables
+Render Jinja2 template → scraper_miso_energy_pricing_http.py
+Generate AI code → Complex auth + validation
+Validate Python syntax → PASSED
+Generate tests → test_scraper_miso_energy_pricing.py
+
+✓ Generation complete!
 
 Generated files:
-✓ sourcing/scraping/nyiso/scraper_nyiso_hourly_load_http.py
-✓ sourcing/scraping/nyiso/tests/test_scraper_nyiso_hourly_load_http.py
-✓ sourcing/scraping/nyiso/tests/fixtures/sample_response.json
-✓ sourcing/scraping/nyiso/README.md
+  - generated_scrapers/scraper_miso_energy_pricing_http.py
+  - generated_scrapers/test_scraper_miso_energy_pricing.py
+  - generated_scrapers/README.md
+  - generated_scrapers/fixtures/sample_data.json
 ```
 
 ## Enhanced Business Analyst Agent

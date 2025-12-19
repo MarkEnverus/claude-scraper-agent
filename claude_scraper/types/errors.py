@@ -114,3 +114,33 @@ class QATestingError(OrchestrationError):
     """
 
     pass
+
+
+class BAAnalysisError(OrchestrationError):
+    """BA Analyzer failed during analysis.
+
+    Raised when the BA Analyzer fails to analyze a URL or produce
+    a validated datasource specification.
+
+    Example:
+        >>> raise BAAnalysisError(
+        ...     "BA Analyzer failed to detect endpoints",
+        ...     url="https://api.example.com"
+        ... )
+    """
+
+    pass
+
+
+class GenerationError(OrchestrationError):
+    """Scraper generation failed.
+
+    Raised when scraper generation fails after BA analysis succeeds.
+    This could be due to template rendering errors, validation failures,
+    or file I/O issues.
+
+    Example:
+        >>> raise GenerationError("Template rendering failed for HTTP scraper")
+    """
+
+    pass

@@ -20,7 +20,7 @@ from .globals import DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIM
 class TypeBuilder(type_builder.TypeBuilder):
     def __init__(self):
         super().__init__(classes=set(
-          ["AccessRequirements","AuthClaims","AuthenticationFindings","AuthenticationSpec","CollationAnalysis","CollationMetadata","CollationResult","CriticalGap","DataCatalog","DataInventory","Discrepancy","DownloadTest","Endpoint","EndpointDetails","EndpointDiscovery","EndpointSpec","ExecutiveSummary","FileMetadataVerification","Parameter","Phase0Detection","Phase1Documentation","Phase2Tests","PhaseValidation","ScraperRecommendation","TestConclusion","TestResult","ValidatedSpec","ValidationReport","ValidationResult","ValidationSummary",]
+          ["AccessRequirements","AuthClaims","AuthenticationFindings","AuthenticationSpec","CollationAnalysis","CollationMetadata","CollationResult","CriticalGap","DataCatalog","DataInventory","Discrepancy","DownloadTest","Endpoint","EndpointDetails","EndpointDiscovery","EndpointSpec","ExecutiveSummary","FileMetadataVerification","GeneratedCode","Parameter","Phase0Detection","Phase1Documentation","Phase2Tests","PhaseValidation","ScraperRecommendation","TestConclusion","TestResult","ValidatedSpec","ValidationReport","ValidationResult","ValidationRules","ValidationSummary",]
         ), enums=set(
           ["AuthenticationMethod","ComplexityLevel","ConfidenceLevel","DataSourceType","DocQuality","ExtractionQuality","HTTPMethod","ParameterLocation","PortalType","ResponseFormat","ScraperType","ValidationOverallStatus","ValidationStatus",]
         ), runtime=DO_NOT_USE_DIRECTLY_UNLESS_YOU_KNOW_WHAT_YOURE_DOING_RUNTIME)
@@ -83,7 +83,7 @@ class TypeBuilder(type_builder.TypeBuilder):
 
 
     # #########################################################################
-    # Generated classes 30
+    # Generated classes 32
     # #########################################################################
 
     @property
@@ -159,6 +159,10 @@ class TypeBuilder(type_builder.TypeBuilder):
         return FileMetadataVerificationViewer(self)
 
     @property
+    def GeneratedCode(self) -> "GeneratedCodeViewer":
+        return GeneratedCodeViewer(self)
+
+    @property
     def Parameter(self) -> "ParameterViewer":
         return ParameterViewer(self)
 
@@ -201,6 +205,10 @@ class TypeBuilder(type_builder.TypeBuilder):
     @property
     def ValidationResult(self) -> "ValidationResultViewer":
         return ValidationResultViewer(self)
+
+    @property
+    def ValidationRules(self) -> "ValidationRulesViewer":
+        return ValidationRulesViewer(self)
 
     @property
     def ValidationSummary(self) -> "ValidationSummaryViewer":
@@ -896,7 +904,7 @@ class ValidationStatusValues:
 
 
 # #########################################################################
-# Generated classes 30
+# Generated classes 32
 # #########################################################################
 
 class AccessRequirementsAst:
@@ -2041,6 +2049,53 @@ class FileMetadataVerificationProperties:
     
 
 
+class GeneratedCodeAst:
+    def __init__(self, tb: type_builder.TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.class_("GeneratedCode")
+        self._properties: typing.Set[str] = set([  "code",  "imports",  "notes",  ])
+        self._props = GeneratedCodeProperties(self._bldr, self._properties)
+
+    def type(self) -> baml_py.FieldType:
+        return self._bldr.field()
+
+    @property
+    def props(self) -> "GeneratedCodeProperties":
+        return self._props
+
+
+class GeneratedCodeViewer(GeneratedCodeAst):
+    def __init__(self, tb: type_builder.TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, type_builder.ClassPropertyViewer]]:
+        return [(name, type_builder.ClassPropertyViewer(self._bldr.property(name))) for name in self._properties]
+    
+
+
+class GeneratedCodeProperties:
+    def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
+        self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
+
+    
+    
+    @property
+    def code(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("code"))
+    
+    @property
+    def imports(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("imports"))
+    
+    @property
+    def notes(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("notes"))
+    
+    
+
+
 class ParameterAst:
     def __init__(self, tb: type_builder.TypeBuilder):
         _tb = tb._tb # type: ignore (we know how to use this private attribute)
@@ -2758,6 +2813,57 @@ class ValidationResultProperties:
     @property
     def validation_notes(self) -> type_builder.ClassPropertyViewer:
         return type_builder.ClassPropertyViewer(self.__bldr.property("validation_notes"))
+    
+    
+
+
+class ValidationRulesAst:
+    def __init__(self, tb: type_builder.TypeBuilder):
+        _tb = tb._tb # type: ignore (we know how to use this private attribute)
+        self._bldr = _tb.class_("ValidationRules")
+        self._properties: typing.Set[str] = set([  "required_fields",  "format_checks",  "range_checks",  "custom_logic",  ])
+        self._props = ValidationRulesProperties(self._bldr, self._properties)
+
+    def type(self) -> baml_py.FieldType:
+        return self._bldr.field()
+
+    @property
+    def props(self) -> "ValidationRulesProperties":
+        return self._props
+
+
+class ValidationRulesViewer(ValidationRulesAst):
+    def __init__(self, tb: type_builder.TypeBuilder):
+        super().__init__(tb)
+
+    
+    def list_properties(self) -> typing.List[typing.Tuple[str, type_builder.ClassPropertyViewer]]:
+        return [(name, type_builder.ClassPropertyViewer(self._bldr.property(name))) for name in self._properties]
+    
+
+
+class ValidationRulesProperties:
+    def __init__(self, bldr: baml_py.ClassBuilder, properties: typing.Set[str]):
+        self.__bldr = bldr
+        self.__properties = properties # type: ignore (we know how to use this private attribute) # noqa: F821
+
+    
+    
+    @property
+    def required_fields(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("required_fields"))
+    
+    @property
+    def format_checks(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("format_checks"))
+    
+    @property
+    def range_checks(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("range_checks"))
+    
+    @property
+    def custom_logic(self) -> type_builder.ClassPropertyViewer:
+        return type_builder.ClassPropertyViewer(self.__bldr.property("custom_logic"))
     
     
 

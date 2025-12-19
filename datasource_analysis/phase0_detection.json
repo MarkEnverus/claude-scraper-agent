@@ -1,98 +1,15 @@
 {
   "detected_type": "API",
-  "confidence": 1.0,
+  "confidence": 0.3,
   "indicators": [
-    "OpenAPI 3 (YAML/JSON) and Swagger documentation explicitly mentioned",
-    "Azure API Management portal detected (developer/apis endpoints)",
-    "Multiple REST API endpoints discovered in network traffic",
-    "Pricing API with 10 documented operations visible",
-    "Clear API documentation with request/response schemas",
-    "GET operations with query parameters for data retrieval",
-    "JSON response format with structured data models",
-    "Bearer token authentication mentioned in documentation"
+    "URL pattern suggests API endpoint (api.example.com subdomain)",
+    "DNS_PROBE_POSSIBLE error - domain not resolvable",
+    "No actual HTML content rendered - Chrome error page",
+    "No network calls successfully completed",
+    "Cannot verify if API exists due to DNS failure"
   ],
-  "discovered_api_calls": [
-    "https://data-exchange.misoenergy.org/developer/apis?$top=50&$skip=0&skipWorkspaces=true&api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api?expandApiVersionSet=true&api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/tags?scope=apis/pricing-api&api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api/hostnames?api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api/operations?$top=50&api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api/operations/get-v1-aggregated-pnode?api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api/schemas/6927396cbe41141cb44e3314?api-version=2022-04-01-preview",
-    "https://data-exchange.misoenergy.org/developer/apis/pricing-api/operations/get-v1-aggregated-pnode/tags?api-version=2022-04-01-preview"
-  ],
-  "endpoints": [
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/aggregated-pnode",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/da-exante-lmp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/da-exante-mcp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/da-expost-lmp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/da-expost-mcp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/rt-exante-lmp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/rt-exante-mcp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/rt-expost-lmp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/rt-expost-mcp",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    },
-    {
-      "path": "https://apim.misoenergy.org/pricing/v1/rt-mcp-summary",
-      "method": "GET",
-      "parameters": [],
-      "auth_required": false,
-      "response_format": "JSON"
-    }
-  ],
-  "url": "https://data-exchange.misoenergy.org/api-details#api=pricing-api",
-  "fallback_strategy": null
+  "discovered_api_calls": [],
+  "endpoints": [],
+  "url": "https://api.example.com",
+  "fallback_strategy": "DNS resolution failed for api.example.com. This appears to be an example/placeholder domain that doesn't actually exist. If this is a real API: 1) Verify the correct domain name, 2) Check if DNS records are properly configured, 3) Confirm the API is publicly accessible, 4) Try accessing with correct authentication if required. The 'api.' subdomain prefix suggests this would be an API if it existed, but no actual endpoints can be discovered without successful connection."
 }

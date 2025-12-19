@@ -139,6 +139,66 @@ class BamlAsyncClient:
                 "url": url,"phase0": phase0,"phase1": phase1,"phase2": phase2,
             })
             return typing.cast(types.ValidatedSpec, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def GenerateCollectContent(self, ba_spec_json: str,endpoint: str,auth_method: str,data_format: str,timeout_seconds: int,retry_attempts: int,
+        baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.GenerateCollectContent(ba_spec_json=ba_spec_json,endpoint=endpoint,auth_method=auth_method,data_format=data_format,timeout_seconds=timeout_seconds,retry_attempts=retry_attempts,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="GenerateCollectContent", args={
+                "ba_spec_json": ba_spec_json,"endpoint": endpoint,"auth_method": auth_method,"data_format": data_format,"timeout_seconds": timeout_seconds,"retry_attempts": retry_attempts,
+            })
+            return typing.cast(types.GeneratedCode, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def GenerateComplexAuth(self, auth_spec: str,auth_method: str,registration_url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.GenerateComplexAuth(auth_spec=auth_spec,auth_method=auth_method,registration_url=registration_url,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="GenerateComplexAuth", args={
+                "auth_spec": auth_spec,"auth_method": auth_method,"registration_url": registration_url,
+            })
+            return typing.cast(types.GeneratedCode, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def GenerateInitCode(self, ba_spec_json: str,custom_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.GenerateInitCode(ba_spec_json=ba_spec_json,custom_requirements=custom_requirements,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="GenerateInitCode", args={
+                "ba_spec_json": ba_spec_json,"custom_requirements": custom_requirements,
+            })
+            return typing.cast(types.GeneratedCode, result.cast_to(types, types, stream_types, False, __runtime__))
+    async def GenerateValidateContent(self, ba_spec_json: str,endpoint: str,data_format: str,validation_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        # Check if on_tick is provided
+        if 'on_tick' in baml_options:
+            # Use streaming internally when on_tick is provided
+            stream = self.stream.GenerateValidateContent(ba_spec_json=ba_spec_json,endpoint=endpoint,data_format=data_format,validation_requirements=validation_requirements,
+                baml_options=baml_options)
+            return await stream.get_final_response()
+        else:
+            # Original non-streaming code
+            result = await self.__options.merge_options(baml_options).call_function_async(function_name="GenerateValidateContent", args={
+                "ba_spec_json": ba_spec_json,"endpoint": endpoint,"data_format": data_format,"validation_requirements": validation_requirements,
+            })
+            return typing.cast(types.GeneratedCode, result.cast_to(types, types, stream_types, False, __runtime__))
     async def MergeCompleteSpecs(self, run1: types.ValidatedSpec,run2: types.ValidatedSpec,
         baml_options: BamlCallOptions = {},
     ) -> types.ValidatedSpec:
@@ -286,6 +346,54 @@ class BamlStreamClient:
           lambda x: typing.cast(types.ValidatedSpec, x.cast_to(types, types, stream_types, False, __runtime__)),
           ctx,
         )
+    def GenerateCollectContent(self, ba_spec_json: str,endpoint: str,auth_method: str,data_format: str,timeout_seconds: int,retry_attempts: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="GenerateCollectContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"auth_method": auth_method,"data_format": data_format,"timeout_seconds": timeout_seconds,"retry_attempts": retry_attempts,
+        })
+        return baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode](
+          result,
+          lambda x: typing.cast(stream_types.GeneratedCode, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.GeneratedCode, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def GenerateComplexAuth(self, auth_spec: str,auth_method: str,registration_url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="GenerateComplexAuth", args={
+            "auth_spec": auth_spec,"auth_method": auth_method,"registration_url": registration_url,
+        })
+        return baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode](
+          result,
+          lambda x: typing.cast(stream_types.GeneratedCode, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.GeneratedCode, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def GenerateInitCode(self, ba_spec_json: str,custom_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="GenerateInitCode", args={
+            "ba_spec_json": ba_spec_json,"custom_requirements": custom_requirements,
+        })
+        return baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode](
+          result,
+          lambda x: typing.cast(stream_types.GeneratedCode, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.GeneratedCode, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
+    def GenerateValidateContent(self, ba_spec_json: str,endpoint: str,data_format: str,validation_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode]:
+        ctx, result = self.__options.merge_options(baml_options).create_async_stream(function_name="GenerateValidateContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"data_format": data_format,"validation_requirements": validation_requirements,
+        })
+        return baml_py.BamlStream[stream_types.GeneratedCode, types.GeneratedCode](
+          result,
+          lambda x: typing.cast(stream_types.GeneratedCode, x.cast_to(types, types, stream_types, True, __runtime__)),
+          lambda x: typing.cast(types.GeneratedCode, x.cast_to(types, types, stream_types, False, __runtime__)),
+          ctx,
+        )
     def MergeCompleteSpecs(self, run1: types.ValidatedSpec,run2: types.ValidatedSpec,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.BamlStream[stream_types.ValidatedSpec, types.ValidatedSpec]:
@@ -394,6 +502,34 @@ class BamlHttpRequestClient:
             "url": url,"phase0": phase0,"phase1": phase1,"phase2": phase2,
         }, mode="request")
         return result
+    async def GenerateCollectContent(self, ba_spec_json: str,endpoint: str,auth_method: str,data_format: str,timeout_seconds: int,retry_attempts: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateCollectContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"auth_method": auth_method,"data_format": data_format,"timeout_seconds": timeout_seconds,"retry_attempts": retry_attempts,
+        }, mode="request")
+        return result
+    async def GenerateComplexAuth(self, auth_spec: str,auth_method: str,registration_url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateComplexAuth", args={
+            "auth_spec": auth_spec,"auth_method": auth_method,"registration_url": registration_url,
+        }, mode="request")
+        return result
+    async def GenerateInitCode(self, ba_spec_json: str,custom_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateInitCode", args={
+            "ba_spec_json": ba_spec_json,"custom_requirements": custom_requirements,
+        }, mode="request")
+        return result
+    async def GenerateValidateContent(self, ba_spec_json: str,endpoint: str,data_format: str,validation_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateValidateContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"data_format": data_format,"validation_requirements": validation_requirements,
+        }, mode="request")
+        return result
     async def MergeCompleteSpecs(self, run1: types.ValidatedSpec,run2: types.ValidatedSpec,
         baml_options: BamlCallOptions = {},
     ) -> baml_py.baml_py.HTTPRequest:
@@ -470,6 +606,34 @@ class BamlHttpStreamRequestClient:
     ) -> baml_py.baml_py.HTTPRequest:
         result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="AnalyzePhase3", args={
             "url": url,"phase0": phase0,"phase1": phase1,"phase2": phase2,
+        }, mode="stream")
+        return result
+    async def GenerateCollectContent(self, ba_spec_json: str,endpoint: str,auth_method: str,data_format: str,timeout_seconds: int,retry_attempts: int,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateCollectContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"auth_method": auth_method,"data_format": data_format,"timeout_seconds": timeout_seconds,"retry_attempts": retry_attempts,
+        }, mode="stream")
+        return result
+    async def GenerateComplexAuth(self, auth_spec: str,auth_method: str,registration_url: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateComplexAuth", args={
+            "auth_spec": auth_spec,"auth_method": auth_method,"registration_url": registration_url,
+        }, mode="stream")
+        return result
+    async def GenerateInitCode(self, ba_spec_json: str,custom_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateInitCode", args={
+            "ba_spec_json": ba_spec_json,"custom_requirements": custom_requirements,
+        }, mode="stream")
+        return result
+    async def GenerateValidateContent(self, ba_spec_json: str,endpoint: str,data_format: str,validation_requirements: str,
+        baml_options: BamlCallOptions = {},
+    ) -> baml_py.baml_py.HTTPRequest:
+        result = await self.__options.merge_options(baml_options).create_http_request_async(function_name="GenerateValidateContent", args={
+            "ba_spec_json": ba_spec_json,"endpoint": endpoint,"data_format": data_format,"validation_requirements": validation_requirements,
         }, mode="stream")
         return result
     async def MergeCompleteSpecs(self, run1: types.ValidatedSpec,run2: types.ValidatedSpec,

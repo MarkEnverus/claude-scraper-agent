@@ -711,15 +711,3 @@ async def test_real_llm_integration_simple_api():
 
 
 # Additional Edge Case Tests
-
-
-def test_cli_deprecated_run_command(runner):
-    """Test that deprecated 'run' command shows warning."""
-    result = runner.invoke(cli, [
-        "run",
-        "--mode", "analyze",
-        "--url", "https://api.example.com",
-    ])
-
-    # Should show deprecation warning
-    assert "deprecated" in result.output.lower() or "warning" in result.output.lower()

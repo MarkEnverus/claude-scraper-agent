@@ -70,6 +70,9 @@ type_map = {
     "types.FileMetadataVerification": types.FileMetadataVerification,
     "stream_types.FileMetadataVerification": stream_types.FileMetadataVerification,
 
+    "types.GeneratedCode": types.GeneratedCode,
+    "stream_types.GeneratedCode": stream_types.GeneratedCode,
+
     "types.Parameter": types.Parameter,
     "stream_types.Parameter": stream_types.Parameter,
 
@@ -102,6 +105,9 @@ type_map = {
 
     "types.ValidationResult": types.ValidationResult,
     "stream_types.ValidationResult": stream_types.ValidationResult,
+
+    "types.ValidationRules": types.ValidationRules,
+    "stream_types.ValidationRules": stream_types.ValidationRules,
 
     "types.ValidationSummary": types.ValidationSummary,
     "stream_types.ValidationSummary": stream_types.ValidationSummary,

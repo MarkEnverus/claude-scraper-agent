@@ -1,48 +1,20 @@
 {
-  "source": "https://data-exchange.misoenergy.org/api-details#api=pricing-api",
-  "timestamp": "2025-12-18T22:38:31Z",
-  "endpoint_tested": "https://data-exchange.misoenergy.org/api-details#api=pricing-api/v1/*",
-  "test_results": {
-    "no_auth": {
-      "http_status": 200,
-      "response_snippet": "<!DOCTYPE html><html lang=\"en\"><head><link rel=\"shortcut icon\" href=\"/content/MISO Icon Only - Blue Green_RGB.png\"><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width,minimum-scale=1,initial-scale=1\"><link href=\"/styles/theme.css\" rel=\"stylesheet\" type=\"text/css\"><script src=\"/scripts/theme.js\" type=\"text/javascript\"></script><title>APIs: Details - MISO Data Exchange</title><meta name=\"description\" content=\"Discover APIs, learn how to use them, try them out interactively, and sign up to acquire keys.\">",
-      "auth_keywords_found": [
-        "sign up to acquire keys"
-      ],
-      "full_output_file": "api_validation_tests/endpoints/*"
-    }
-  },
+  "source": "https://api.example.com",
+  "timestamp": "2024-01-01T00:00:00Z",
+  "endpoint_tested": null,
+  "test_results": null,
   "conclusion": {
-    "auth_required": true,
-    "evidence": "HTTP 200 returns HTML documentation page (not API data). Meta description explicitly states 'sign up to acquire keys'. All 10 endpoints tested return identical HTML content with Content-Type: text/html instead of JSON/XML API responses. The URLs tested contain fragment identifiers (#api=pricing-api) which caused the web server to return the API documentation portal page rather than actual API endpoints.",
-    "likely_auth_method": "API_KEY",
-    "likely_header_name": "Ocp-Apim-Subscription-Key",
-    "confidence": "HIGH"
+    "auth_required": false,
+    "evidence": "No endpoints were tested. Total endpoints tested: 0. Cannot determine authentication requirements without test execution.",
+    "likely_auth_method": "UNKNOWN",
+    "likely_header_name": null,
+    "confidence": "LOW"
   },
-  "files_saved": [
-    "api_validation_tests/endpoints/aggregated-pnode",
-    "api_validation_tests/endpoints/day-ahead-ex-ante-lmp",
-    "api_validation_tests/endpoints/day-ahead-ex-ante-mcp",
-    "api_validation_tests/endpoints/day-ahead-ex-post-lmp",
-    "api_validation_tests/endpoints/day-ahead-ex-post-mcp",
-    "api_validation_tests/endpoints/real-time-ex-ante-lmp",
-    "api_validation_tests/endpoints/real-time-ex-ante-mcp",
-    "api_validation_tests/endpoints/real-time-ex-post-lmp",
-    "api_validation_tests/endpoints/real-time-ex-post-mcp",
-    "api_validation_tests/endpoints/real-time-mcp-summary"
-  ],
+  "files_saved": [],
   "source_type": "API",
   "download_tests": null,
-  "authentication_findings": {
-    "auth_required": true,
-    "evidence": "All requests returned HTML documentation pages instead of API data. Response headers include 'x-ms-client-request-id' indicating Azure API Management gateway. Meta tags explicitly mention 'sign up to acquire keys' for API access.",
-    "cookie_required": false,
-    "redirect_to_login": false,
-    "auth_headers_found": [
-      "x-ms-client-request-id"
-    ]
-  },
+  "authentication_findings": null,
   "file_metadata_verification": null,
-  "portal_type": "API_DOCS",
-  "portal_conclusion": "The URLs tested were malformed - they included HTML fragment identifiers (#api=pricing-api) instead of actual API endpoint paths. All requests returned the API documentation portal page (HTML) with status 200, not actual API responses. The documentation page explicitly states users must 'sign up to acquire keys', confirming authentication is required. The presence of Azure API Management headers (x-ms-client-request-id) indicates the API uses Azure APIM, which typically requires the 'Ocp-Apim-Subscription-Key' header. Correct endpoint URLs should follow the pattern: https://data-exchange.misoenergy.org/api/pricing-api/v1/{resource} without fragment identifiers."
+  "portal_type": null,
+  "portal_conclusion": null
 }

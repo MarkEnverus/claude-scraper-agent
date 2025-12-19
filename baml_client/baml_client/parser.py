@@ -48,6 +48,30 @@ class LlmResponseParser:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AnalyzePhase3", llm_response=llm_response, mode="request")
         return typing.cast(types.ValidatedSpec, result)
 
+    def GenerateCollectContent(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateCollectContent", llm_response=llm_response, mode="request")
+        return typing.cast(types.GeneratedCode, result)
+
+    def GenerateComplexAuth(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateComplexAuth", llm_response=llm_response, mode="request")
+        return typing.cast(types.GeneratedCode, result)
+
+    def GenerateInitCode(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateInitCode", llm_response=llm_response, mode="request")
+        return typing.cast(types.GeneratedCode, result)
+
+    def GenerateValidateContent(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateValidateContent", llm_response=llm_response, mode="request")
+        return typing.cast(types.GeneratedCode, result)
+
     def MergeCompleteSpecs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
     ) -> types.ValidatedSpec:
@@ -115,6 +139,30 @@ class LlmStreamParser:
     ) -> stream_types.ValidatedSpec:
         result = self.__options.merge_options(baml_options).parse_response(function_name="AnalyzePhase3", llm_response=llm_response, mode="stream")
         return typing.cast(stream_types.ValidatedSpec, result)
+
+    def GenerateCollectContent(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateCollectContent", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.GeneratedCode, result)
+
+    def GenerateComplexAuth(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateComplexAuth", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.GeneratedCode, result)
+
+    def GenerateInitCode(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateInitCode", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.GeneratedCode, result)
+
+    def GenerateValidateContent(
+        self, llm_response: str, baml_options: BamlCallOptions = {},
+    ) -> stream_types.GeneratedCode:
+        result = self.__options.merge_options(baml_options).parse_response(function_name="GenerateValidateContent", llm_response=llm_response, mode="stream")
+        return typing.cast(stream_types.GeneratedCode, result)
 
     def MergeCompleteSpecs(
         self, llm_response: str, baml_options: BamlCallOptions = {},
