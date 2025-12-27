@@ -98,7 +98,6 @@ class ScraperOrchestrator:
         self,
         url: str,
         output_dir: Optional[Union[str, Path]] = None,
-        requires_ai: bool = True,
     ) -> OrchestrationResult:
         """Generate scraper by analyzing URL with BA Analyzer.
 
@@ -111,14 +110,13 @@ class ScraperOrchestrator:
         Args:
             url: Source URL to analyze
             output_dir: Where to save generated scraper (default: smart default based on source)
-            requires_ai: Whether to use BAML for AI code generation
 
         Returns:
             OrchestrationResult with generated files and metadata
 
         Raises:
             BAAnalysisError: If BA Analyzer fails
-            GenerationError: If scraper generation fails
+            GenerationError: If scraper generation fails or BAML not available
             ValueError: If URL is invalid
         """
         if not url or not url.strip():
@@ -172,7 +170,6 @@ class ScraperOrchestrator:
             generated = await self._generate_scraper(
                 ba_spec_dict=ba_spec_dict,
                 output_dir=output_dir,
-                requires_ai=requires_ai,
             )
         except Exception as e:
             logger.error("Scraper generation failed", extra={"url": url, "error": str(e)}, exc_info=True)
@@ -202,7 +199,6 @@ class ScraperOrchestrator:
         self,
         ba_spec_file: Union[str, Path],
         output_dir: Optional[Union[str, Path]] = None,
-        requires_ai: bool = True,
     ) -> OrchestrationResult:
         """Generate scraper from existing BA spec file.
 
@@ -214,13 +210,12 @@ class ScraperOrchestrator:
         Args:
             ba_spec_file: Path to validated_datasource_spec.json
             output_dir: Where to save generated scraper (default: smart default based on source)
-            requires_ai: Whether to use BAML for AI code generation
 
         Returns:
             OrchestrationResult with generated files and metadata
 
         Raises:
-            GenerationError: If scraper generation fails
+            GenerationError: If scraper generation fails or BAML not available
             FileNotFoundError: If BA spec file doesn't exist
             ValueError: If BA spec is invalid
         """
@@ -240,7 +235,6 @@ class ScraperOrchestrator:
             generated = await self._generate_scraper(
                 ba_spec_dict=ba_spec_dict,
                 output_dir=output_dir,
-                requires_ai=requires_ai,
             )
         except Exception as e:
             logger.error("Scraper generation failed", extra={"spec_path": str(spec_path), "error": str(e)}, exc_info=True)
@@ -272,7 +266,6 @@ class ScraperOrchestrator:
         self,
         ba_spec_dict: Dict[str, Any],
         output_dir: Optional[Union[str, Path]],
-        requires_ai: bool,
     ) -> GeneratedFiles:
         """Generate scraper using HybridGenerator.
 
@@ -282,13 +275,12 @@ class ScraperOrchestrator:
         Args:
             ba_spec_dict: BA Analyzer validated spec
             output_dir: Output directory for scraper
-            requires_ai: Use BAML for AI generation
 
         Returns:
             GeneratedFiles with paths to created files
 
         Raises:
-            GenerationError: If generation fails
+            GenerationError: If generation fails or BAML not available
         """
         source_type = ba_spec_dict.get("source_type", "").upper()
 
@@ -309,7 +301,6 @@ class ScraperOrchestrator:
             return await self.hybrid_generator.generate_scraper(
                 ba_spec=ba_spec_dict,
                 output_dir=output_dir,
-                requires_ai=requires_ai,
             )
         else:
             raise GenerationError(
@@ -347,7 +338,7 @@ class ScraperOrchestrator:
     def _determine_output_dir(self, ba_spec: Dict[str, Any]) -> Path:
         """Determine smart output directory from BA spec.
 
-        Creates: ./generated_scrapers/{source_snake}/
+        Creates: ./sourcing/scraping/{datasource}/{dataset}/
 
         Args:
             ba_spec: Validated BA spec
@@ -360,5 +351,10 @@ class ScraperOrchestrator:
         transformer = VariableTransformer()
         transformed = transformer.transform(ba_spec)
         source_snake = transformed["template_vars"]["source_snake"]
+        dataset_snake = transformed["template_vars"].get("dataset_snake", "data")
 
-        return Path(f"./generated_scrapers/{source_snake}/")
+        # Use source_snake as datasource (already in snake_case)
+        datasource = source_snake
+        dataset = dataset_snake
+
+        return Path(f"./sourcing/scraping/{datasource}/{dataset}/")

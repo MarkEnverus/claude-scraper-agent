@@ -6,10 +6,10 @@ import json
 
 # Add parent directory to path for imports
 import sys
-from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent.parent / "infrastructure"))
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from hash_registry import HashRegistry
+from commons.hash_registry import HashRegistry
 
 
 @pytest.fixture

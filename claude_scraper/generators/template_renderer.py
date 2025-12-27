@@ -61,8 +61,15 @@ class TemplateRenderer:
             words = re.split(r'[\s\-_]+', text)
             return ''.join(word.capitalize() for word in words if word)
 
+        # Add dedent filter for AI-generated code
+        def dedent(text: str) -> str:
+            """Remove leading whitespace from code blocks."""
+            import textwrap
+            return textwrap.dedent(text)
+
         self.env.filters['snake_case'] = to_snake_case
         self.env.filters['camel_case'] = to_camel_case
+        self.env.filters['dedent'] = dedent
 
     def render(self, template_name: str, variables: Dict[str, Any]) -> str:
         """Render a template with variables.
@@ -153,6 +160,17 @@ class TemplateRenderer:
             Rendered README markdown
         """
         return self.render("scraper_readme.md.j2", variables)
+
+    def render_integration_test(self, variables: Dict[str, Any]) -> str:
+        """Render INTEGRATION_TEST.md documentation file.
+
+        Args:
+            variables: Template variables from VariableTransformer
+
+        Returns:
+            Rendered integration test markdown
+        """
+        return self.render("INTEGRATION_TEST.md.j2", variables)
 
     def list_templates(self) -> list[str]:
         """List all available templates in template directory.

@@ -350,17 +350,11 @@ async def run_analysis(url: str, output_dir: str, debug: bool) -> None:
     type=click.Path(path_type=Path),
     help="Output directory for generated scraper (default: ./generated_scrapers/{source_snake}/)",
 )
-@click.option(
-    "--no-ai",
-    is_flag=True,
-    help="Skip AI code generation (use placeholder comments)",
-)
 @click.option("--debug", is_flag=True, help="Enable debug logging")
 def generate(
     ba_spec_file: Path | None,
     url: str | None,
     output_dir: Path | None,
-    no_ai: bool,
     debug: bool,
 ) -> None:
     """Generate scraper from BA spec or URL.
@@ -375,9 +369,6 @@ def generate(
 
         # Analyze URL first, then generate
         claude-scraper generate --url https://api.example.com --output-dir my_scraper
-
-        # Skip AI code generation (faster, for testing)
-        claude-scraper generate --ba-spec-file spec.json --no-ai
     """
     try:
         # Validate input
@@ -406,8 +397,6 @@ def generate(
 
         orchestrator = ScraperOrchestrator()
 
-        requires_ai = not no_ai
-
         # Execute based on input mode
         if ba_spec_file:
             # Mode 1: Use existing BA spec
@@ -417,7 +406,6 @@ def generate(
                 orchestrator.generate_from_spec(
                     ba_spec_file=ba_spec_file,
                     output_dir=output_dir,
-                    requires_ai=requires_ai,
                 )
             )
 
@@ -430,7 +418,6 @@ def generate(
                 orchestrator.generate_from_url(
                     url=url,
                     output_dir=output_dir,
-                    requires_ai=requires_ai,
                 )
             )
 
@@ -697,6 +684,15 @@ def update(
 
         console.print("\n[bold cyan]Scraper Updater[/bold cyan]\n")
         console.print(f"[dim]Current infrastructure version: {CURRENT_INFRASTRUCTURE_VERSION}[/dim]\n")
+
+        # Step 0: Copy infrastructure (gold standard) - only in auto mode
+        if mode == "auto":
+            console.print("[cyan]Updating infrastructure to v1.6.0 (gold standard)...[/cyan]")
+            if not updater.copy_infrastructure():
+                console.print("[bold red]✗ Failed to copy infrastructure[/bold red]")
+                console.print("[dim]Cannot proceed without infrastructure[/dim]")
+                raise click.Abort()
+            console.print("[green]✓ Infrastructure updated[/green]\n")
 
         # Step 1: Scan scrapers
         console.print("[cyan]Scanning scrapers...[/cyan]")

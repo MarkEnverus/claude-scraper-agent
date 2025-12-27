@@ -27,9 +27,9 @@ import hashlib
 import logging
 import re
 
-from sourcing.scraping.commons.hash_registry import HashRegistry
+from sourcing.commons.hash_registry import HashRegistry
 from sourcing.exceptions import ScrapingError
-from sourcing.scraping.commons.s3_utils import S3Configuration, S3Uploader
+from sourcing.commons.s3_utils import S3Configuration, S3Uploader
 
 logger = logging.getLogger("sourcing_app")
 

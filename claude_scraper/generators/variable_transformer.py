@@ -45,6 +45,13 @@ class VariableTransformer:
         source_clean = self._clean_source_name(source)
         data_type = self._infer_data_type(ba_spec)
 
+        # Dataset extraction: Currently expects 'dataset' field to be present in BA spec.
+        # NOTE: This field is NOT part of the standard ValidatedSpec schema and must be
+        # manually added to BA specs until the BA agent is updated to automatically infer
+        # dataset names during analysis. Fallback to "data" if not provided.
+        # Future: BA agent should infer dataset from endpoint patterns or data catalog.
+        dataset = ba_spec.get("dataset", "data")
+
         return {
             # Basic identification
             "source": source,
@@ -54,6 +61,8 @@ class VariableTransformer:
             "data_type": data_type,
             "data_type_lower": data_type.lower(),
             "data_type_snake": self._to_snake_case(data_type),
+            "dataset": dataset,
+            "dataset_snake": self._to_snake_case(dataset),
 
             # Class and file naming
             "class_name": self._generate_class_name(source_clean, data_type),
@@ -179,11 +188,9 @@ class VariableTransformer:
     def _generate_filename(self, source: str, data_type: str) -> str:
         """Generate filename for scraper.
 
-        Example: "MISO", "energy_pricing" -> "scraper_miso_energy_pricing_http.py"
+        Always returns 'main.py' as per sourcing module conventions.
         """
-        source_snake = self._to_snake_case(source)
-        data_type_snake = self._to_snake_case(data_type)
-        return f"scraper_{source_snake}_{data_type_snake}_http.py"
+        return "main.py"
 
     def _generate_auth_env_var(self, source: str) -> str:
         """Generate environment variable name for authentication.
@@ -242,11 +249,17 @@ class VariableTransformer:
         if base_url:
             return base_url
 
-        # Try first endpoint
+        # Try first endpoint's base_url field
         endpoints = ba_spec.get("endpoints", [])
         if endpoints:
             first_endpoint = endpoints[0]
             if isinstance(first_endpoint, dict):
+                # Try direct base_url field (BA Analyzer format)
+                base_url = first_endpoint.get("base_url")
+                if base_url:
+                    return base_url
+
+                # Fallback: Try to parse from full_url or url
                 full_url = first_endpoint.get("full_url") or first_endpoint.get("url", "")
                 if full_url:
                     parsed = urlparse(full_url)

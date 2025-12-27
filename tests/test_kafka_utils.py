@@ -11,9 +11,10 @@ from pathlib import Path
 
 # Import the classes we're testing
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / "infrastructure"))
+import os
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from kafka_utils import (
+from commons.kafka_utils import (
     KafkaConfiguration,
     KafkaProducer,
     ScraperNotificationMessage

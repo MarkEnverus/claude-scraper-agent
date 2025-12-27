@@ -9,7 +9,7 @@ import os
 # Add parent directory to path for imports
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from infrastructure.s3_utils import (
+from commons.s3_utils import (
     S3Configuration,
     S3PathBuilder,
     S3Uploader,
@@ -265,7 +265,7 @@ class TestS3PathBuilder:
 class TestS3Uploader:
     """Tests for S3Uploader class."""
 
-    @patch("infrastructure.s3_utils.boto3.client")
+    @patch("commons.s3_utils.boto3.client")
     def test_upload_success(self, mock_boto3_client: Mock) -> None:
         """Test successful upload."""
         # Mock S3 client
@@ -305,7 +305,7 @@ class TestS3Uploader:
         )
         assert call_args[1]["Body"] == b"test data"
 
-    @patch("infrastructure.s3_utils.boto3.client")
+    @patch("commons.s3_utils.boto3.client")
     def test_upload_invalid_version_format(self, mock_boto3_client: Mock) -> None:
         """Test upload with invalid version format."""
         config = S3Configuration("bucket", "prefix")
@@ -319,7 +319,7 @@ class TestS3Uploader:
                 version="invalid"
             )
 
-    @patch("infrastructure.s3_utils.boto3.client")
+    @patch("commons.s3_utils.boto3.client")
     def test_upload_version_parameter_used(self, mock_boto3_client: Mock) -> None:
         """Test that version parameter is used (not auto-generated)."""
         mock_s3_client = Mock()
@@ -342,7 +342,7 @@ class TestS3Uploader:
         # Version should be in S3 path
         assert version_input in s3_path
 
-    @patch("infrastructure.s3_utils.boto3.client")
+    @patch("commons.s3_utils.boto3.client")
     def test_upload_s3_error(self, mock_boto3_client: Mock) -> None:
         """Test upload with S3 error."""
         mock_s3_client = Mock()
@@ -360,7 +360,7 @@ class TestS3Uploader:
                 version="20251215113400Z"
             )
 
-    @patch("infrastructure.s3_utils.boto3.client")
+    @patch("commons.s3_utils.boto3.client")
     def test_upload_no_prefix(self, mock_boto3_client: Mock) -> None:
         """Test upload with no prefix."""
         mock_s3_client = Mock()

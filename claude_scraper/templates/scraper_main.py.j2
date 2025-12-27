@@ -19,6 +19,9 @@ Generator: {{ generator_agent }}
 import os
 import sys
 import logging
+import json
+import hashlib
+import time
 from datetime import datetime, timedelta, date, UTC
 from typing import List, Dict, Any, Optional
 
@@ -30,22 +33,21 @@ import requests
 sys.path.insert(
     0,
     os.path.abspath(
-        os.path.join(os.path.dirname(__file__), "../../../")
+        os.path.join(os.path.dirname(__file__), "../../../../")  # 4 levels up (added dataset dir)
     ),
 )
 
-from infrastructure.collection_framework import (
+from sourcing.commons.collection_framework import (
     BaseCollector,
     DownloadCandidate,
-    CollectedContent,
-    ValidationResult,
 )
-from infrastructure.hash_registry import HashRegistry
-from infrastructure.s3_utils import S3Manager
-from infrastructure.kafka_utils import KafkaProducer
-from infrastructure.logging_json import get_logger
+from sourcing.exceptions import ScrapingError
+from sourcing.commons.hash_registry import HashRegistry
+from sourcing.commons.s3_utils import S3Uploader
+from sourcing.commons.kafka_utils import KafkaProducer
+from sourcing.commons.logging_json import setup_logging
 
-logger = get_logger(__name__)
+logger = setup_logging("INFO")
 
 
 # ============================================================================
@@ -86,7 +88,7 @@ class {{ class_name }}(BaseCollector):
         self,
         api_key: Optional[str] = None,
         redis_client: Optional[redis.Redis] = None,
-        s3_manager: Optional[S3Manager] = None,
+        s3_uploader: Optional[S3Uploader] = None,
         kafka_producer: Optional[KafkaProducer] = None,
         dgroup: str = "{{ dgroup }}",
     ):
@@ -95,13 +97,13 @@ class {{ class_name }}(BaseCollector):
         Args:
             api_key: {{ auth_method }} authentication key
             redis_client: Redis client for hash registry
-            s3_manager: S3 manager for file uploads
+            s3_uploader: S3 manager for file uploads
             kafka_producer: Kafka producer for notifications
             dgroup: Data group identifier
         """
         super().__init__(
             redis_client=redis_client,
-            s3_manager=s3_manager,
+            s3_uploader=s3_uploader,
             kafka_producer=kafka_producer,
             dgroup=dgroup,
         )
@@ -141,7 +143,7 @@ class {{ class_name }}(BaseCollector):
         }
 {% else %}
         # Custom authentication logic (AI-generated)
-        {{ init_code | indent(8) }}
+        {{ init_code | dedent | indent(8) }}
 {% endif %}
 {% else %}
         # No authentication required
@@ -179,13 +181,13 @@ class {{ class_name }}(BaseCollector):
                 # Build URL with date parameters
                 url = self._build_url(endpoint, current_date)
 
-                # Create candidate
+                # Create candidate with correct DownloadCandidate fields
                 candidate = DownloadCandidate(
-                    url=url,
-                    expected_filename=self._generate_filename(
+                    identifier=self._generate_filename(
                         endpoint["name"],
                         current_date,
                     ),
+                    source_location=url,
                     metadata={
                         "source": "{{ source_lower }}",
                         "data_type": "{{ data_type_lower }}",
@@ -193,6 +195,11 @@ class {{ class_name }}(BaseCollector):
                         "date": current_date.isoformat(),
                         "dgroup": self.dgroup,
                     },
+                    collection_params={
+                        "headers": self.auth_headers,
+                        "timeout": self.timeout,
+                    },
+                    file_date=current_date,
                 )
                 candidates.append(candidate)
 
@@ -217,17 +224,47 @@ class {{ class_name }}(BaseCollector):
             target_date: Target date for data
 
         Returns:
-            Fully-qualified URL
+            Fully-qualified URL with query parameters
         """
         path = endpoint["path"]
 
-        # Replace date placeholders
+        # Replace date placeholders in path (for path parameters)
         path = path.replace("{date}", target_date.strftime("%Y-%m-%d"))
         path = path.replace("{year}", str(target_date.year))
         path = path.replace("{month}", f"{target_date.month:02d}")
         path = path.replace("{day}", f"{target_date.day:02d}")
 
-        return f"{self.base_url}{path}"
+        # Build query parameters from endpoint params configuration
+        query_params = {}
+        params_config = endpoint.get("params", {})
+
+        for param_name, param_config in params_config.items():
+            if not isinstance(param_config, dict):
+                continue
+
+            # Check if this param is required or commonly used
+            is_required = param_config.get("required", False)
+            param_type = param_config.get("type", "string")
+
+            # Add date-related parameters
+            if param_name in ["date", "marketDate", "settlementDate", "startDate"]:
+                query_params[param_name] = target_date.strftime("%Y-%m-%d")
+            elif param_name == "endDate":
+                # For endDate, use same as startDate by default
+                query_params[param_name] = target_date.strftime("%Y-%m-%d")
+            # Add other required parameters with example values if available
+            elif is_required and "example" in param_config:
+                example_val = param_config["example"]
+                if example_val is not None:
+                    query_params[param_name] = str(example_val)
+
+        # Construct final URL with query string
+        url = f"{self.base_url}{path}"
+        if query_params:
+            query_string = "&".join(f"{k}={v}" for k, v in query_params.items())
+            url = f"{url}?{query_string}"
+
+        return url
 
     def _generate_filename(self, endpoint_name: str, target_date: date) -> str:
         """Generate expected filename for downloaded content.
@@ -242,7 +279,7 @@ class {{ class_name }}(BaseCollector):
         date_str = target_date.strftime("%Y%m%d")
         return f"{{ source_snake }}_{{ data_type_snake }}_{endpoint_name}_{date_str}.{{ data_format }}"
 
-    def collect_content(self, candidate: DownloadCandidate) -> CollectedContent:
+    def collect_content(self, candidate: DownloadCandidate) -> bytes:
         """Collect content from candidate URL.
 
         This method handles HTTP requests, retries, error handling,
@@ -252,15 +289,15 @@ class {{ class_name }}(BaseCollector):
             candidate: Download candidate with URL and metadata
 
         Returns:
-            CollectedContent with downloaded data
+            Raw bytes of collected content
 
         Raises:
-            requests.RequestException: On HTTP errors
+            ScrapingError: On collection failure
         """
         # AI-generated collection logic
-        {{ collect_content_code | indent(8) }}
+        {{ collect_content_code | dedent | indent(8) }}
 
-    def validate_content(self, content: CollectedContent) -> ValidationResult:
+    def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
         """Validate collected content.
 
         This method checks that downloaded content meets quality requirements:
@@ -269,13 +306,14 @@ class {{ class_name }}(BaseCollector):
         - Data integrity checks
 
         Args:
-            content: Collected content to validate
+            content: Collected content (raw bytes)
+            candidate: Candidate that was collected
 
         Returns:
-            ValidationResult with validation status and messages
+            True if valid, False otherwise
         """
         # AI-generated validation logic
-        {{ validate_content_code | indent(8) }}
+        {{ validate_content_code | dedent | indent(8) }}
 
 
 # ============================================================================
@@ -389,7 +427,7 @@ def main(
             decode_responses=False,
         )
 
-        s3_manager = S3Manager(bucket_name=s3_bucket)
+        s3_uploader = S3Uploader(bucket_name=s3_bucket)
 
         kafka_producer = None
         if kafka_bootstrap_servers:
@@ -402,7 +440,7 @@ def main(
         collector = {{ class_name }}(
             api_key=api_key,
             redis_client=redis_client,
-            s3_manager=s3_manager,
+            s3_uploader=s3_uploader,
             kafka_producer=kafka_producer,
             dgroup=dgroup,
         )

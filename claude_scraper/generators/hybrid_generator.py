@@ -14,6 +14,13 @@ from dataclasses import dataclass, field
 
 from claude_scraper.generators.variable_transformer import VariableTransformer
 from claude_scraper.generators.template_renderer import TemplateRenderer
+from claude_scraper.infrastructure_manager import InfrastructureManager
+from claude_scraper.validators import (
+    ValidationConfig,
+    InterfaceExtractor,
+    CodeValidator,
+    ValidationLevel,
+)
 
 # Import BAML generated client (will be available after baml generate)
 try:
@@ -52,15 +59,18 @@ class HybridGenerator:
         self,
         template_dir: Optional[Path] = None,
         use_baml: bool = True,
+        validation_config: Optional[ValidationConfig] = None,
     ):
         """Initialize hybrid generator.
 
         Args:
             template_dir: Directory containing Jinja2 templates
             use_baml: Use BAML for AI code generation (set False for testing)
+            validation_config: Validation configuration (None = from environment)
         """
         self.transformer = VariableTransformer()
         self.renderer = TemplateRenderer(template_dir)
+        self.infra_manager = InfrastructureManager()
 
         # Check if BAML is requested but not available
         if use_baml and not BAML_AVAILABLE:
@@ -70,28 +80,98 @@ class HybridGenerator:
 
         self.use_baml = use_baml and BAML_AVAILABLE
 
+        # Initialize validation
+        self.validation_config = validation_config or ValidationConfig.from_environment()
+        if self.validation_config.is_enabled():
+            try:
+                extractor = InterfaceExtractor()
+                self.interface = extractor.extract_base_collector_interface()
+                self.validator = CodeValidator(self.interface)
+            except Exception as e:
+                # If validation setup fails, log warning but don't block
+                print(f"Warning: Validation setup failed: {e}. Validation disabled.")
+                self.validation_config = ValidationConfig.disabled()
+                self.validator = None
+        else:
+            self.validator = None
+
+    def _ensure_sourcing_commons(self) -> bool:
+        """Ensure sourcing/commons/ exists with all commons files.
+
+        Copies files from /commons/ to sourcing/commons/ if they don't exist
+        or are outdated.
+
+        Returns:
+            True if sourcing/commons/ is ready, False otherwise
+        """
+        import shutil
+        from pathlib import Path
+
+        commons_src = Path("commons")
+        commons_dst = Path("sourcing/commons")
+
+        if not commons_src.exists():
+            raise FileNotFoundError(
+                "commons/ directory not found. Did you rename infrastructure/ to commons/?"
+            )
+
+        # Create sourcing/commons/ if doesn't exist
+        commons_dst.mkdir(parents=True, exist_ok=True)
+
+        # Copy all commons files
+        commons_files = [
+            "collection_framework.py",
+            "hash_registry.py",
+            "s3_utils.py",
+            "kafka_utils.py",
+            "logging_json.py",
+        ]
+
+        for filename in commons_files:
+            src_file = commons_src / filename
+            dst_file = commons_dst / filename
+
+            if not src_file.exists():
+                print(f"Warning: Commons file not found: {src_file}")
+                continue
+
+            # Copy file (overwrite if exists to ensure up-to-date)
+            shutil.copy2(src_file, dst_file)
+
+        # Create __init__.py if doesn't exist
+        init_file = commons_dst / "__init__.py"
+        if not init_file.exists():
+            init_file.write_text(
+                '"""Sourcing commons - infrastructure utilities for data collectors."""\n',
+                encoding="utf-8"
+            )
+
+        return True
+
     async def generate_scraper(
         self,
         ba_spec: Dict[str, Any],
         output_dir: Path,
-        requires_ai: bool = True,
     ) -> GeneratedFiles:
         """Generate complete scraper from BA Analyzer spec.
 
         Args:
             ba_spec: Validated data source spec from BA Analyzer
             output_dir: Directory to write generated files
-            requires_ai: Generate AI code (default True per user requirement)
 
         Returns:
             GeneratedFiles with paths to created files
 
         Raises:
             ValueError: If spec validation fails
-            RuntimeError: If code generation fails
+            RuntimeError: If code generation fails or BAML not available
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
+
+        # Step 0: Ensure sourcing/commons/ exists and is up-to-date
+        if not self._ensure_sourcing_commons():
+            raise RuntimeError("Failed to initialize sourcing/commons/")
 
         # Step 1: Validate BA spec
         validation_errors = self.validate_ba_spec(ba_spec)
@@ -112,36 +192,93 @@ class HybridGenerator:
                 f"Variable transformation validation failed:\n" + "\n".join(errors)
             )
 
-        # Step 4: Generate AI code via BAML (if required)
-        if requires_ai and self.use_baml:
-            ai_code = await self._generate_ai_code(ba_spec, baml_inputs, template_vars)
+        # Step 4: Generate AI code via BAML (mandatory)
+        if not self.use_baml:
+            raise RuntimeError(
+                "AI code generation required but BAML not available. "
+                "Run 'baml generate' to set up BAML client."
+            )
 
-            # Add AI-generated code to template variables
-            template_vars["init_code"] = ai_code["init_code"]
-            template_vars["collect_content_code"] = ai_code["collect_content_code"]
-            template_vars["validate_content_code"] = ai_code["validate_content_code"]
-        else:
-            # Fallback: Use placeholder comments with pass statements
-            template_vars["init_code"] = "# TODO: Add custom initialization\npass"
-            template_vars["collect_content_code"] = "# TODO: Implement collect_content logic\npass"
-            template_vars["validate_content_code"] = "# TODO: Implement validate_content logic\npass"
+        ai_code = await self._generate_ai_code(ba_spec, baml_inputs, template_vars)
+
+        # Add AI-generated code to template variables
+        template_vars["init_code"] = ai_code["init_code"]
+        template_vars["collect_content_code"] = ai_code["collect_content_code"]
+        template_vars["validate_content_code"] = ai_code["validate_content_code"]
 
         # Step 5: Render templates
         scraper_code = self.renderer.render_scraper_main(template_vars)
         test_code = self.renderer.render_scraper_tests(template_vars)
         readme_content = self.renderer.render_readme(template_vars)
+        integration_test_content = self.renderer.render_integration_test(template_vars)
 
-        # Step 6: Write files
+        # Step 5.5: Validate generated code (if enabled)
+        if self.validator and self.validation_config.is_enabled():
+            validation_report = self.validator.validate_code(scraper_code)
+
+            if validation_report.has_critical_errors():
+                critical_errors = validation_report.get_critical_errors()
+                error_summary = "\n".join(
+                    f"  [{e.category}] {e.message}" for e in critical_errors
+                )
+
+                if self.validation_config.strict_mode:
+                    raise RuntimeError(
+                        f"Generated code has {len(critical_errors)} critical interface violations:\n"
+                        f"{error_summary}\n\n"
+                        f"The generated code does not conform to BaseCollector interface.\n"
+                        f"This usually means BAML prompts need updating or templates have errors."
+                    )
+                else:
+                    print(f"⚠️  Warning: Generated code has {len(critical_errors)} critical errors:")
+                    print(error_summary)
+
+            # Log warnings (non-blocking)
+            warnings = validation_report.get_warnings()
+            if warnings:
+                print(f"ℹ️  Generated code has {len(warnings)} warnings (non-critical)")
+                for warning in warnings[:5]:  # Show first 5
+                    print(f"  [{warning.category}] {warning.message}")
+
+        # Step 6: Create directory structure
+        # output_dir should already be sourcing/scraping/{datasource}/{dataset}/
+        scraper_dir = output_dir  # No nesting - use directly
+        tests_dir = scraper_dir / "tests"
+        fixtures_dir = tests_dir / "fixtures"
+
+        scraper_dir.mkdir(parents=True, exist_ok=True)
+        tests_dir.mkdir(exist_ok=True)
+        fixtures_dir.mkdir(exist_ok=True)
+
+        # Step 7: Write scraper files
         scraper_filename = template_vars["filename"]
-        scraper_path = output_dir / scraper_filename
-        test_path = output_dir / f"test_{scraper_filename}"
-        readme_path = output_dir / "README.md"
+        scraper_path = scraper_dir / scraper_filename
+        test_path = tests_dir / "test_main.py"
+        readme_path = scraper_dir / "README.md"
+        integration_test_path = scraper_dir / "INTEGRATION_TEST.md"
 
         scraper_path.write_text(scraper_code, encoding="utf-8")
         test_path.write_text(test_code, encoding="utf-8")
         readme_path.write_text(readme_content, encoding="utf-8")
+        integration_test_path.write_text(integration_test_content, encoding="utf-8")
 
-        # Step 7: Return generated files
+        # Step 7.5: Create package structure
+        (scraper_dir / "__init__.py").write_text(
+            f'"""Generated scraper for {template_vars["source"]} - {template_vars.get("dataset", "data")} dataset."""\n',
+            encoding="utf-8"
+        )
+        (tests_dir / "__init__.py").write_text("", encoding="utf-8")
+
+        # Step 8: Generate project files (skipped for sourcing/ scrapers)
+        # pyproject.toml and .gitignore only needed for standalone scrapers
+        # For sourcing/ scrapers, these are managed at the repository root
+        # if standalone_mode:
+        #     if not self.infra_manager.generate_pyproject_toml(output_dir, source_snake):
+        #         pass
+        #     if not self.infra_manager.generate_gitignore(output_dir):
+        #         pass
+
+        # Step 9: Return generated files
         metadata = {
             "source": template_vars["source"],
             "data_type": template_vars["data_type"],
@@ -149,8 +286,7 @@ class HybridGenerator:
             "collection_method": template_vars["collection_method"],
             "generated_date": template_vars["generated_date"],
             "infrastructure_version": template_vars["infrastructure_version"],
-            "requires_ai": requires_ai,
-            "ai_generated": requires_ai and self.use_baml,
+            "ai_generated": self.use_baml,
         }
 
         return GeneratedFiles(
@@ -188,7 +324,7 @@ class HybridGenerator:
         tasks.append(
             b.GenerateCollectContent(
                 ba_spec_json=ba_spec_json,
-                endpoint=baml_inputs["endpoints"][0] if baml_inputs["endpoints"] else {},
+                endpoint=baml_inputs["endpoints"][0].get("endpoint_id", "") if baml_inputs["endpoints"] else "",
                 auth_method=baml_inputs["auth_method"],
                 data_format=template_vars["data_format"],
                 timeout_seconds=template_vars["timeout_seconds"],
@@ -200,7 +336,7 @@ class HybridGenerator:
         tasks.append(
             b.GenerateValidateContent(
                 ba_spec_json=ba_spec_json,
-                endpoint=baml_inputs["endpoints"][0] if baml_inputs["endpoints"] else {},
+                endpoint=baml_inputs["endpoints"][0].get("endpoint_id", "") if baml_inputs["endpoints"] else "",
                 data_format=template_vars["data_format"],
                 validation_requirements=json.dumps({
                     "data_format": template_vars["data_format"],
@@ -258,20 +394,18 @@ class HybridGenerator:
         self,
         ba_spec: Dict[str, Any],
         output_dir: Path,
-        requires_ai: bool = True,
     ) -> GeneratedFiles:
         """Synchronous wrapper for generate_scraper.
 
         Args:
             ba_spec: Validated data source spec
             output_dir: Directory for generated files
-            requires_ai: Generate AI code
 
         Returns:
             GeneratedFiles with paths
         """
         return asyncio.run(
-            self.generate_scraper(ba_spec, output_dir, requires_ai)
+            self.generate_scraper(ba_spec, output_dir)
         )
 
     def validate_ba_spec(self, ba_spec: Dict[str, Any]) -> list[str]:
