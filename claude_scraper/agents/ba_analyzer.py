@@ -140,21 +140,27 @@ class BAAnalyzer:
             # Step 1: Botasaurus extracts page data
             try:
                 botasaurus_data = self.botasaurus.extract_comprehensive_data(current_url)
+
+                # FIX: Issue #3 - Fail fast if extraction failed
+                if botasaurus_data.get('extraction_error'):
+                    error_msg = botasaurus_data['extraction_error']
+                    logger.error(f"❌ EXTRACTION FAILED - Cannot continue analysis")
+                    logger.error(f"URL: {current_url}")
+                    logger.error(f"Error: {error_msg}")
+                    logger.error("⚠️  Aborting Phase 0 - analysis would be based on NO actual data")
+                    raise RuntimeError(f"Extraction failed for {current_url}: {error_msg}")
+
                 logger.info(f"✅ Extraction complete:")
                 logger.info(f"  - Markdown: {len(botasaurus_data.get('markdown', ''))} chars")
                 logger.info(f"  - Navigation links: {len(botasaurus_data.get('navigation_links', []))}")
                 logger.info(f"  - Network calls: {len(botasaurus_data.get('network_calls', []))}")
+            except RuntimeError:
+                # Re-raise extraction failures (fail fast)
+                raise
             except Exception as e:
-                logger.warning(f"Extraction failed for {current_url}: {e}")
-                # Add empty data and continue
-                botasaurus_data = {
-                    "full_text": "",
-                    "markdown": "",
-                    "navigation_links": [],
-                    "network_calls": [],
-                    "expanded_sections": 0,
-                    "screenshot": None
-                }
+                logger.error(f"❌ Unexpected error during extraction for {current_url}: {e}")
+                logger.error("⚠️  Aborting Phase 0 - cannot continue with failed extraction")
+                raise
 
             # Mark as visited and store data
             visited.add(current_url)

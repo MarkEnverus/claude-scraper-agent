@@ -203,12 +203,15 @@ class BotasaurusTool:
             - network_calls: API URLs discovered during page load
             - expanded_sections: Count of sections expanded
             - screenshot: Path to screenshot file (or None)
+            - extraction_error: None if successful, error message if failed (FIX: Issue #2)
 
         Example:
             >>> tool = BotasaurusTool()
             >>> data = tool.extract_comprehensive_data("https://api.example.com/docs")
-            >>> print(f"Found {len(data['navigation_links'])} navigation links")
-            >>> print(f"Page text: {len(data['full_text'])} characters")
+            >>> if data.get('extraction_error'):
+            >>>     print(f"Extraction failed: {data['extraction_error']}")
+            >>> else:
+            >>>     print(f"Found {len(data['navigation_links'])} navigation links")
         """
         logger.info(f"Extracting comprehensive data from {url}")
 
@@ -280,19 +283,29 @@ class BotasaurusTool:
                 "navigation_links": nav_links,
                 "network_calls": network_calls,
                 "expanded_sections": expanded_count,
-                "screenshot": screenshot_path
+                "screenshot": screenshot_path,
+                "extraction_error": None  # FIX: Issue #2 - No error
             }
 
         except Exception as e:
-            logger.error(f"Comprehensive extraction failed: {e}", exc_info=True)
-            # Return empty structure instead of raising
+            # FIX: Issue #2 - Use WARNING instead of ERROR (graceful degradation, not crash)
+            # Provide specific error message for actionable debugging
+            error_msg = f"{type(e).__name__}: {str(e)[:200]}"
+            logger.warning(f"❌ Comprehensive extraction FAILED - Analysis will be unreliable!")
+            logger.warning(f"Error type: {type(e).__name__}")
+            logger.warning(f"Error message: {str(e)[:200]}")
+            logger.warning("⚠️  Returning empty data - Phase 0 analysis should detect this and abort")
+            logger.debug(f"Full traceback:", exc_info=True)  # Full trace at DEBUG level
+
+            # Return empty structure with error indicator
             return {
                 "full_text": "",
                 "markdown": "",
                 "navigation_links": [],
                 "network_calls": [],
                 "expanded_sections": 0,
-                "screenshot": None
+                "screenshot": None,
+                "extraction_error": error_msg  # FIX: Issue #2 - Error indicator for caller
             }
         finally:
             if driver:
@@ -385,6 +398,13 @@ class BotasaurusTool:
         Returns:
             Endpoint URL/path if found, None otherwise
         """
+        # FIX: Issue #4 - Track diagnostics for better error reporting
+        diagnostics = {
+            'selectors_tried': 0,
+            'elements_found': 0,
+            'elements_checked': 0
+        }
+
         try:
             import re
 
@@ -400,9 +420,14 @@ class BotasaurusTool:
             ]
 
             for selector in selectors:
+                diagnostics['selectors_tried'] += 1
                 try:
                     elements = driver.select_all(selector, wait=None)
+                    if elements:
+                        diagnostics['elements_found'] += len(elements)
+
                     for elem in elements:
+                        diagnostics['elements_checked'] += 1
                         text = elem.text.strip()
 
                         # Look for path patterns: /api/..., /v1/..., etc.
@@ -425,11 +450,23 @@ class BotasaurusTool:
                     logger.debug(f"    Failed to check selector {selector}: {e}")
                     continue
 
-            logger.debug(f"    No endpoint path found in DOM for {op_name}")
+            # FIX: Issue #4 - Provide diagnostic info at INFO level when nothing found
+            logger.info(f"    ❌ Could not extract endpoint URL from Swagger DOM for '{op_name}'")
+            logger.info(f"    Diagnostics:")
+            logger.info(f"      - Selectors tried: {diagnostics['selectors_tried']}")
+            logger.info(f"      - Elements found: {diagnostics['elements_found']}")
+            logger.info(f"      - Elements checked: {diagnostics['elements_checked']}")
+            logger.info(f"    Troubleshooting:")
+            logger.info(f"      - Page may not be Swagger/OpenAPI UI")
+            logger.info(f"      - Operation details may not be visible yet (wait longer)")
+            logger.info(f"      - DOM structure may have changed (update selectors)")
             return None
 
         except Exception as e:
-            logger.debug(f"    DOM extraction error: {e}")
+            # FIX: Issue #4 - Log failures at INFO level with context
+            logger.info(f"    ❌ DOM extraction failed for '{op_name}': {type(e).__name__}")
+            logger.info(f"    Error: {str(e)[:100]}")
+            logger.debug(f"    Full traceback:", exc_info=True)
             return None
 
     def _expand_all_sections(self, driver: Driver) -> int:
@@ -726,6 +763,30 @@ class BotasaurusTool:
             logger.error(f"Screenshot compression failed: {e}")
             return False
 
+    def _safe_get_hash(self, driver: Driver) -> str:
+        """Safely get window.location.hash with error handling.
+
+        FIX: Issue #5 - JavaScript execute_script can fail due to:
+        - CORS restrictions
+        - Security policies
+        - Page not fully loaded
+        - Browser context issues
+
+        Args:
+            driver: Botasaurus Driver instance
+
+        Returns:
+            Hash string (e.g., "#/api/endpoint") or empty string on error
+        """
+        try:
+            hash_value = driver.execute_script("return window.location.hash")
+            return hash_value if hash_value else ""
+        except Exception as e:
+            # Log at INFO level - this is expected on some pages
+            logger.info(f"    ⚠️  Could not access window.location.hash: {type(e).__name__}")
+            logger.debug(f"    Error details: {str(e)[:100]}")
+            return ""
+
     def extract_operation_urls(self, url: str, operation_names: list[str]) -> dict[str, str]:
         """Extract actual operation URLs by clicking on operations.
 
@@ -802,14 +863,16 @@ class BotasaurusTool:
 
                                 # Strategy 2: Try clicking to see if URL changes
                                 original_url = driver.current_url
-                                original_hash = driver.execute_script("return window.location.hash")
+                                # FIX: Issue #5 - Use safe wrapper to avoid JavaScript errors
+                                original_hash = self._safe_get_hash(driver)
 
                                 try:
                                     link.click()
                                     driver.sleep(2)  # Wait for navigation
 
                                     new_url = driver.current_url
-                                    new_hash = driver.execute_script("return window.location.hash")
+                                    # FIX: Issue #5 - Use safe wrapper to avoid JavaScript errors
+                                    new_hash = self._safe_get_hash(driver)
 
                                     if new_url != original_url:
                                         # URL changed - navigation occurred
@@ -1122,6 +1185,15 @@ class BotasaurusTool:
         logger.info("=== PHASE 3: ATTEMPTING API SPEC PARSING ===")
         logger.info(f"Trying to fetch API specification from: {url}")
 
+        # FIX: Track failure categories for actionable error reporting
+        failure_categories = {
+            'auth': [],      # 401, 403 errors
+            'network': [],   # Connection, timeout errors
+            'parse': [],     # Malformed JSON/XML
+            'empty': [],     # Valid format but no endpoints
+            'http': []       # Other HTTP errors (404, 500, etc.)
+        }
+
         try:
             # Step 1: Find candidate spec URLs
             candidates = self._find_spec_urls(url)
@@ -1138,6 +1210,11 @@ class BotasaurusTool:
 
                     if response.status_code != 200:
                         logger.debug(f"  ❌ HTTP {response.status_code}")
+                        # Categorize HTTP errors
+                        if response.status_code in [401, 403]:
+                            failure_categories['auth'].append((spec_url, response.status_code))
+                        else:
+                            failure_categories['http'].append((spec_url, response.status_code))
                         continue
 
                     # Determine format from content-type or URL
@@ -1151,6 +1228,7 @@ class BotasaurusTool:
 
                             if not endpoints:
                                 logger.debug(f"  ❌ No endpoints in spec")
+                                failure_categories['empty'].append((spec_url, 'JSON spec has no endpoints'))
                                 continue
 
                             # Determine version
@@ -1160,6 +1238,7 @@ class BotasaurusTool:
                                 spec_type = "swagger2"
                             else:
                                 logger.debug(f"  ❌ Unknown JSON spec format")
+                                failure_categories['parse'].append((spec_url, 'Unknown JSON format (not OpenAPI/Swagger)'))
                                 continue
 
                             logger.info(f"✅ Found {spec_type} spec with {len(endpoints)} endpoints at: {spec_url}")
@@ -1172,6 +1251,7 @@ class BotasaurusTool:
 
                         except Exception as json_error:
                             logger.debug(f"  ❌ JSON parse error: {json_error}")
+                            failure_categories['parse'].append((spec_url, f'JSON parse: {str(json_error)[:100]}'))
                             continue
 
                     elif 'xml' in content_type or 'wadl' in spec_url.lower() or spec_url.endswith('.wadl'):
@@ -1181,6 +1261,7 @@ class BotasaurusTool:
 
                             if not endpoints:
                                 logger.debug(f"  ❌ No endpoints in WADL")
+                                failure_categories['empty'].append((spec_url, 'WADL has no endpoints'))
                                 continue
 
                             logger.info(f"✅ Found WADL spec with {len(endpoints)} endpoints at: {spec_url}")
@@ -1193,13 +1274,52 @@ class BotasaurusTool:
 
                         except Exception as wadl_error:
                             logger.debug(f"  ❌ WADL parse error: {wadl_error}")
+                            failure_categories['parse'].append((spec_url, f'WADL parse: {str(wadl_error)[:100]}'))
                             continue
 
+                except requests.exceptions.Timeout:
+                    logger.debug(f"  ❌ Timeout fetching {spec_url}")
+                    failure_categories['network'].append((spec_url, 'Timeout (>10s)'))
+                    continue
+                except requests.exceptions.ConnectionError as e:
+                    logger.debug(f"  ❌ Connection error: {e}")
+                    failure_categories['network'].append((spec_url, f'Connection error: {str(e)[:50]}'))
+                    continue
                 except Exception as e:
                     logger.debug(f"  ❌ Failed to fetch {spec_url}: {e}")
+                    failure_categories['network'].append((spec_url, str(e)[:100]))
                     continue
 
-            logger.info("❌ No API specification found")
+            # FIX: Provide categorized failure summary at WARNING level
+            logger.warning("❌ No valid API specification found after trying all candidates")
+            logger.warning(f"Failure summary:")
+
+            if failure_categories['auth']:
+                logger.warning(f"  - {len(failure_categories['auth'])} auth-protected (401/403) - specs may require API keys")
+                for url, code in failure_categories['auth'][:3]:  # Show first 3
+                    logger.warning(f"    • {url} (HTTP {code})")
+
+            if failure_categories['parse']:
+                logger.warning(f"  - {len(failure_categories['parse'])} parse errors - specs may be malformed")
+                for url, error in failure_categories['parse'][:3]:
+                    logger.warning(f"    • {url}: {error}")
+
+            if failure_categories['empty']:
+                logger.warning(f"  - {len(failure_categories['empty'])} empty specs - valid format but no endpoints")
+                for url, reason in failure_categories['empty'][:3]:
+                    logger.warning(f"    • {url}: {reason}")
+
+            if failure_categories['http']:
+                logger.warning(f"  - {len(failure_categories['http'])} HTTP errors - specs not found at standard locations")
+                for url, code in failure_categories['http'][:3]:
+                    logger.warning(f"    • {url} (HTTP {code})")
+
+            if failure_categories['network']:
+                logger.warning(f"  - {len(failure_categories['network'])} network errors - connection/timeout issues")
+                for url, error in failure_categories['network'][:3]:
+                    logger.warning(f"    • {url}: {error}")
+
+            logger.warning("Will fall back to operation clicking for endpoint discovery")
             return None
 
         except Exception as e:
