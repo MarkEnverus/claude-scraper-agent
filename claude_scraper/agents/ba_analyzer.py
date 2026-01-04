@@ -386,6 +386,9 @@ class BAAnalyzer:
                     logger.warning(f"Vision-based analysis failed: {e}", exc_info=True)
                     logger.info("Falling back to pattern-based methods")
 
+            # Initialize spa_data to None to avoid UnboundLocalError
+            spa_data = None
+
             # If vision didn't extract operations, try other methods
             if not vision_extracted_operations:
                 logger.info("Vision extraction did not produce results, trying fallback methods")
