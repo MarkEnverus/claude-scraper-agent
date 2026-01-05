@@ -79,7 +79,7 @@ def test_extract_template_vars(transformer, sample_ba_spec):
     # Check generated names
     assert template_vars["class_name"] == "MisoEnergyPricingCollector"
     assert template_vars["dgroup"] == "miso_energy_pricing"
-    assert template_vars["filename"] == "scraper_miso_energy_pricing_http.py"
+    assert template_vars["filename"] == "main.py"
 
     # Check auth fields
     assert template_vars["auth_required"] is True
@@ -141,8 +141,8 @@ def test_generate_dgroup(transformer):
 
 def test_generate_filename(transformer):
     """Test filename generation."""
-    assert transformer._generate_filename("MISO", "energy_pricing") == "scraper_miso_energy_pricing_http.py"
-    assert transformer._generate_filename("nyiso", "load") == "scraper_nyiso_load_http.py"
+    assert transformer._generate_filename("MISO", "energy_pricing") == "main.py"
+    assert transformer._generate_filename("nyiso", "load") == "main.py"
 
 
 def test_generate_auth_env_var(transformer):

@@ -12,7 +12,7 @@ Rate limiting: 1 request per second
 Timeout: 10 seconds per request
 
 Example:
-    >>> from baml_client.types import EndpointSpec, HTTPMethod, ResponseFormat
+    >>> from claude_scraper.types import EndpointSpec, HTTPMethod, ResponseFormat
     >>> from claude_scraper.agents.endpoint_qa import EndpointQATester
     >>>
     >>> tester = EndpointQATester()
@@ -34,13 +34,34 @@ import time
 import logging
 from typing import Literal
 
-from baml_client.baml_client.types import EndpointSpec
+from pydantic import BaseModel
+
+from claude_scraper.types import EndpointSpec
 from claude_scraper.storage.repository import AnalysisRepository
 
 logger = logging.getLogger(__name__)
 
 # Decision type for endpoint QA
 EndpointDecision = Literal["keep", "remove", "flag"]
+
+
+class EndpointTestResult(BaseModel):
+    """Result from testing a single endpoint."""
+    endpoint: str
+    method: str
+    status_code: int | None
+    decision: EndpointDecision
+    response_time_ms: float | None
+    error: str | None
+
+
+class QATestSummary(BaseModel):
+    """Summary of all endpoint QA tests."""
+    total_tested: int
+    keep: int
+    remove: int
+    flag: int
+    results: list[EndpointTestResult]
 
 
 class EndpointQATester:
@@ -137,7 +158,7 @@ class EndpointQATester:
         if elapsed < self.RATE_LIMIT_DELAY:
             time.sleep(self.RATE_LIMIT_DELAY - elapsed)
 
-    def test_endpoint(self, endpoint: EndpointSpec) -> dict:
+    def test_endpoint(self, endpoint: EndpointSpec) -> EndpointTestResult:
         """Test a single endpoint and return results.
 
         Makes HTTP request to endpoint and applies decision matrix
@@ -147,13 +168,7 @@ class EndpointQATester:
             endpoint: EndpointSpec to test
 
         Returns:
-            Dictionary with test results:
-                - endpoint: str - endpoint path
-                - method: str - HTTP method
-                - status_code: int | None - response status code
-                - decision: EndpointDecision - keep/remove/flag
-                - response_time_ms: float | None - response time
-                - error: str | None - error message if request failed
+            EndpointTestResult with test results
 
         Example:
             >>> endpoint = EndpointSpec(
@@ -166,7 +181,7 @@ class EndpointQATester:
             ...     authentication_mentioned=False
             ... )
             >>> result = tester.test_endpoint(endpoint)
-            >>> print(result["decision"])
+            >>> print(result.decision)
         """
         self._enforce_rate_limit()
 
@@ -188,45 +203,45 @@ class EndpointQATester:
 
             logger.info(f"  Status: {status_code} -> Decision: {decision}")
 
-            return {
-                "endpoint": endpoint.path,
-                "method": endpoint.method.value,
-                "status_code": status_code,
-                "decision": decision,
-                "response_time_ms": response.elapsed.total_seconds() * 1000,
-                "error": None
-            }
+            return EndpointTestResult(
+                endpoint=endpoint.path,
+                method=endpoint.method.value,
+                status_code=status_code,
+                decision=decision,
+                response_time_ms=response.elapsed.total_seconds() * 1000,
+                error=None
+            )
 
         except httpx.TimeoutException:
             logger.warning(f"  Timeout testing {endpoint.path}")
-            return {
-                "endpoint": endpoint.path,
-                "method": endpoint.method.value,
-                "status_code": None,
-                "decision": "flag",
-                "response_time_ms": None,
-                "error": "timeout"
-            }
+            return EndpointTestResult(
+                endpoint=endpoint.path,
+                method=endpoint.method.value,
+                status_code=None,
+                decision="flag",
+                response_time_ms=None,
+                error="timeout"
+            )
         except httpx.NetworkError as e:
             logger.warning(f"  Network error: {e}")
-            return {
-                "endpoint": endpoint.path,
-                "method": endpoint.method.value,
-                "status_code": None,
-                "decision": "flag",
-                "response_time_ms": None,
-                "error": f"network: {e}"
-            }
+            return EndpointTestResult(
+                endpoint=endpoint.path,
+                method=endpoint.method.value,
+                status_code=None,
+                decision="flag",
+                response_time_ms=None,
+                error=f"network: {e}"
+            )
         except Exception as e:
             logger.error(f"  Unexpected error: {e}")
-            return {
-                "endpoint": endpoint.path,
-                "method": endpoint.method.value,
-                "status_code": None,
-                "decision": "flag",
-                "response_time_ms": None,
-                "error": f"unexpected: {e}"
-            }
+            return EndpointTestResult(
+                endpoint=endpoint.path,
+                method=endpoint.method.value,
+                status_code=None,
+                decision="flag",
+                response_time_ms=None,
+                error=f"unexpected: {e}"
+            )
 
     def _get_decision(self, status_code: int) -> EndpointDecision:
         """Get decision from status code using decision matrix.
@@ -257,7 +272,7 @@ class EndpointQATester:
 
         return decision
 
-    def test_all_endpoints(self, endpoints: list[EndpointSpec]) -> dict:
+    def test_all_endpoints(self, endpoints: list[EndpointSpec]) -> QATestSummary:
         """Test all endpoints and return summary.
 
         Tests each endpoint sequentially with rate limiting and
@@ -267,17 +282,12 @@ class EndpointQATester:
             endpoints: List of EndpointSpec objects to test
 
         Returns:
-            Dictionary with summary:
-                - total_tested: int - number of endpoints tested
-                - keep: int - number of endpoints to keep
-                - remove: int - number of endpoints to remove
-                - flag: int - number of endpoints flagged
-                - results: list[dict] - individual test results
+            QATestSummary with test results
 
         Example:
             >>> endpoints = [endpoint1, endpoint2, endpoint3]
             >>> summary = tester.test_all_endpoints(endpoints)
-            >>> print(f"Kept {summary['keep']} of {summary['total_tested']}")
+            >>> print(f"Kept {summary.keep} of {summary.total_tested}")
         """
         logger.info(f"Testing {len(endpoints)} endpoints")
 
@@ -287,20 +297,20 @@ class EndpointQATester:
             results.append(result)
 
         # Generate summary
-        summary = {
-            "total_tested": len(endpoints),
-            "keep": sum(1 for r in results if r["decision"] == "keep"),
-            "remove": sum(1 for r in results if r["decision"] == "remove"),
-            "flag": sum(1 for r in results if r["decision"] == "flag"),
-            "results": results
-        }
+        summary = QATestSummary(
+            total_tested=len(endpoints),
+            keep=sum(1 for r in results if r.decision == "keep"),
+            remove=sum(1 for r in results if r.decision == "remove"),
+            flag=sum(1 for r in results if r.decision == "flag"),
+            results=results
+        )
 
-        # Save results
+        # Save results using repository
         self.repository.save("endpoint_qa_results.json", summary)
 
         logger.info(
-            f"QA complete: {summary['keep']} kept, "
-            f"{summary['remove']} removed, {summary['flag']} flagged"
+            f"QA complete: {summary.keep} kept, "
+            f"{summary.remove} removed, {summary.flag} flagged"
         )
 
         return summary
@@ -308,7 +318,7 @@ class EndpointQATester:
     def filter_endpoints(
         self,
         endpoints: list[EndpointSpec],
-        test_results: dict
+        test_results: QATestSummary
     ) -> list[EndpointSpec]:
         """Filter endpoints based on QA test results.
 
@@ -329,8 +339,8 @@ class EndpointQATester:
         """
         # Create lookup of path -> decision
         decisions = {
-            r["endpoint"]: r["decision"]
-            for r in test_results["results"]
+            r.endpoint: r.decision
+            for r in test_results.results
         }
 
         # Keep only endpoints with "keep" decision

@@ -178,6 +178,10 @@ class TestAnthropicProvider:
         """Test retry logic on rate limit errors."""
         from anthropic import RateLimitError
 
+        # Create mock httpx response for rate limit error
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+
         # First call rate limited, second succeeds
         mock_content = MagicMock()
         mock_content.text = "Success"
@@ -186,7 +190,7 @@ class TestAnthropicProvider:
 
         mock_client = MagicMock()
         mock_client.messages.create.side_effect = [
-            RateLimitError("Rate limited"),
+            RateLimitError("Rate limited", response=mock_response, body=None),
             mock_response_success
         ]
         mock_anthropic_class.return_value = mock_client
@@ -208,6 +212,10 @@ class TestAnthropicProvider:
         """Test that exponential backoff uses correct delays: 1s, 2s, 4s."""
         from anthropic import RateLimitError
 
+        # Create mock httpx response for rate limit error
+        mock_response = MagicMock()
+        mock_response.status_code = 429
+
         # Mock successful response
         mock_content = MagicMock()
         mock_content.text = "Success"
@@ -217,9 +225,9 @@ class TestAnthropicProvider:
         # Fail 3 times, then succeed on 4th attempt
         mock_client = MagicMock()
         mock_client.messages.create.side_effect = [
-            RateLimitError("Rate limited"),
-            RateLimitError("Rate limited"),
-            RateLimitError("Rate limited"),
+            RateLimitError("Rate limited", response=mock_response, body=None),
+            RateLimitError("Rate limited", response=mock_response, body=None),
+            RateLimitError("Rate limited", response=mock_response, body=None),
             mock_response_success
         ]
         mock_anthropic_class.return_value = mock_client
@@ -243,7 +251,7 @@ class TestAnthropicProvider:
 class TestLLMFactory:
     """Test LLM provider factory."""
 
-    @patch('claude_scraper.llm.factory.boto3')
+    @patch('claude_scraper.llm.bedrock.boto3')
     def test_create_bedrock_provider(self, mock_boto3):
         """Test factory creates Bedrock provider."""
         config = Config.from_env(provider="bedrock")
@@ -253,10 +261,10 @@ class TestLLMFactory:
         assert provider.model_id == config.model_id
         assert provider.region == config.region
 
-    @patch('claude_scraper.llm.factory.Anthropic')
+    @patch('claude_scraper.llm.anthropic.Anthropic')
     def test_create_anthropic_provider(self, mock_anthropic):
         """Test factory creates Anthropic provider."""
-        with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'}):
+        with patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'sk-ant-test-key-12345'}):
             config = Config.from_env(provider="anthropic")
             provider = create_llm_provider("anthropic", config)
 
@@ -265,7 +273,13 @@ class TestLLMFactory:
 
     def test_create_invalid_provider(self):
         """Test factory raises error for invalid provider."""
-        config = Config.from_env(provider="bedrock")
+        # Create a config manually with invalid provider to bypass Config.from_env validation
+        from dataclasses import replace
 
-        with pytest.raises(ValueError, match="Unknown provider: invalid"):
-            create_llm_provider("invalid", config)
+        with patch.dict('os.environ', {'AWS_REGION': 'us-east-1'}):
+            config = Config.from_env(provider="bedrock")
+            # Modify config to have invalid provider
+            config = replace(config, provider="invalid")
+
+            with pytest.raises(ValueError, match="Unknown provider: invalid"):
+                create_llm_provider("invalid", config)

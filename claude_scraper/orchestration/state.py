@@ -1,11 +1,12 @@
 """LangGraph state definition for BA analysis pipeline.
 
 This module defines the AnalysisState TypedDict that tracks the state
-through the 5-agent pipeline orchestration:
+through the 6-agent pipeline orchestration:
 - Run 1: BA Analyzer (4 phases) + BA Validator
 - Decision: Determine if Run 2 is needed (confidence < 0.8)
 - Run 2: BA Analyzer (4 phases) + BA Validator (conditional)
 - Collation: BA Collator merges Run 1 + Run 2 (if exists)
+- Phase 4: Executive Summary Generator
 - QA: Endpoint QA testing
 
 The state uses BAML-generated types for type safety and tracks all
@@ -19,7 +20,7 @@ Example:
 
 from typing import TypedDict
 
-from baml_client.baml_client.types import (
+from claude_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
@@ -48,13 +49,14 @@ class QAResults(TypedDict):
 class AnalysisState(TypedDict, total=False):
     """State for the BA analysis pipeline.
 
-    This TypedDict tracks all state through the 5-node LangGraph pipeline.
+    This TypedDict tracks all state through the 6-node LangGraph pipeline.
     Fields are optional (total=False) since they get populated progressively
     as the pipeline executes.
 
     Attributes:
         url: Input URL to analyze (required)
         output_dir: Output directory for analysis files (optional, defaults to "datasource_analysis")
+        provider: LLM provider to use (anthropic or bedrock)
 
         # Run 1 outputs
         phase0_run1: Phase 0 detection results from Run 1
@@ -72,6 +74,8 @@ class AnalysisState(TypedDict, total=False):
 
         # Final outputs
         final_spec: Final validated specification after collation
+        executive_summary_markdown: Markdown executive summary (Phase 4 output)
+        executive_summary_path: Path to saved executive_summary.md file
         qa_results: Endpoint QA testing results
 
         # Control flow
@@ -91,6 +95,7 @@ class AnalysisState(TypedDict, total=False):
     # Input
     url: str
     output_dir: str
+    provider: str
 
     # Run 1 outputs
     phase0_run1: Phase0Detection
@@ -108,6 +113,8 @@ class AnalysisState(TypedDict, total=False):
 
     # Final outputs
     final_spec: ValidatedSpec
+    executive_summary_markdown: str | None
+    executive_summary_path: str | None
     qa_results: QAResults
 
     # Control flow

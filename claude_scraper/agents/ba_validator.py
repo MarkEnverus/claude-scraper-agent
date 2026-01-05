@@ -4,15 +4,16 @@ This module implements the validation agent that checks BA analysis outputs
 for completeness, assigns confidence scores, and determines if a second
 analysis run is needed.
 
-The validator implements the logic from ba-validator.md and uses BAML
-functions to perform LLM-based validation of each phase and the complete
-specification.
+The validator uses Claude's structured outputs to perform LLM-based validation
+of each phase and the complete specification.
 
 Example:
     >>> from claude_scraper.agents.ba_validator import BAValidator
-    >>> from baml_client.types import Phase0Detection, ValidatedSpec
+    >>> from claude_scraper.llm import create_llm_provider
+    >>> from claude_scraper.types import Phase0Detection, ValidatedSpec
     >>>
-    >>> validator = BAValidator()
+    >>> llm_provider = create_llm_provider("bedrock", config)
+    >>> validator = BAValidator(llm_provider)
     >>>
     >>> # Validate Phase 0
     >>> phase0 = Phase0Detection(...)
@@ -31,16 +32,23 @@ import logging
 from datetime import datetime, timezone
 from typing import Any
 
-from baml_client import b
-from baml_client.types import (
+from claude_scraper.llm.base import LLMProvider
+from claude_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
     ValidatedSpec,
     ValidationReport,
+    ValidationResult,
     ValidationOverallStatus,
     PhaseValidation,
     CriticalGap,
+)
+from claude_scraper.prompts.ba_validator import (
+    validate_phase0_prompt,
+    validate_phase1_prompt,
+    validate_phase2_prompt,
+    validate_complete_spec_prompt,
 )
 from claude_scraper.storage.repository import AnalysisRepository
 
@@ -71,12 +79,14 @@ class BAValidator:
 
     def __init__(
         self,
+        llm_provider: LLMProvider,
         repository: AnalysisRepository | None = None,
         confidence_threshold: float = RUN2_CONFIDENCE_THRESHOLD
     ):
         """Initialize BA Validator.
 
         Args:
+            llm_provider: LLM provider for structured LLM calls (Bedrock or Anthropic)
             repository: Optional repository for persistence. If None, uses default.
             confidence_threshold: Confidence threshold for Run 2 decision (default: 0.8)
 
@@ -88,6 +98,7 @@ class BAValidator:
         elif confidence_threshold > 1.0:
             raise ValueError(f"confidence_threshold must be <= 1.0, got {confidence_threshold}")
 
+        self.llm = llm_provider
         self.repository = repository or AnalysisRepository()
         self.confidence_threshold = confidence_threshold
 
@@ -134,10 +145,17 @@ class BAValidator:
         )
 
         try:
-            # Call BAML validation function
-            result = await b.ValidatePhase0(
+            # Create prompt for Phase 0 validation
+            prompt = validate_phase0_prompt(
                 phase0_result=phase0,
                 original_url=original_url
+            )
+
+            # Call LLM with structured output
+            result = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=ValidationResult,
+                system="You are an expert validation analyst specializing in data source detection validation."
             )
 
             logger.info(
@@ -200,9 +218,17 @@ class BAValidator:
         )
 
         try:
-            result = await b.ValidatePhase1(
+            # Create prompt for Phase 1 validation
+            prompt = validate_phase1_prompt(
                 phase1_result=phase1,
                 phase0_result=phase0
+            )
+
+            # Call LLM with structured output
+            result = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=ValidationResult,
+                system="You are an expert validation analyst specializing in documentation extraction validation."
             )
 
             logger.info(
@@ -259,9 +285,17 @@ class BAValidator:
         )
 
         try:
-            result = await b.ValidatePhase2(
+            # Create prompt for Phase 2 validation
+            prompt = validate_phase2_prompt(
                 phase2_result=phase2,
                 phase1_result=phase1
+            )
+
+            # Call LLM with structured output
+            result = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=ValidationResult,
+                system="You are an expert validation analyst specializing in API testing and authentication validation."
             )
 
             logger.info(
@@ -340,8 +374,15 @@ class BAValidator:
             }
 
         try:
-            # Call BAML validation function
-            report = await b.ValidateCompleteSpec(spec=spec)
+            # Create prompt for complete spec validation
+            prompt = validate_complete_spec_prompt(spec=spec)
+
+            # Call LLM with structured output
+            report = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=ValidationReport,
+                system="You are an expert validation analyst specializing in comprehensive data source specification validation."
+            )
 
             # INJECT deterministic gap if LLM missed it
             if enumeration_gap:

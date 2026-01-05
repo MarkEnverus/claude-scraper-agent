@@ -6,10 +6,18 @@ from claude_scraper.cli.config import Config
 
 
 def test_bedrock_config_defaults():
-    """Test Bedrock configuration with default values"""
-    config = Config.from_env("bedrock")
+    """Test Bedrock configuration with default values (DEPRECATED)"""
+    import warnings
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("always")
+        config = Config.from_env("bedrock")
+        # Should get deprecation warning
+        assert len(w) == 1
+        assert issubclass(w[0].category, DeprecationWarning)
+        assert "deprecated" in str(w[0].message).lower()
+
     assert config.provider == "bedrock"
-    assert config.model_id == "anthropic.claude-sonnet-4-5-20250929-v1:0"
+    assert config.model_id == "anthropic.claude-3-5-sonnet-20240620-v1:0"
     assert config.region == "us-west-2"
     assert config.api_key is None
 
@@ -24,6 +32,18 @@ def test_bedrock_config_custom_env(monkeypatch):
     assert config.model_id == "anthropic.claude-opus-4-5-20251101-v1:0"
     assert config.region == "us-east-1"
     assert config.api_key is None
+
+
+def test_default_provider_is_anthropic(monkeypatch):
+    """Test that Anthropic is now the default provider"""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "sk-ant-test-key-123")
+
+    # Call without specifying provider - should default to Anthropic
+    config = Config.from_env()
+    assert config.provider == "anthropic"
+    assert config.model_id == "claude-sonnet-4-5-20250929"
+    assert config.region is None
+    assert config.api_key == "sk-ant-test-key-123"
 
 
 def test_anthropic_config_with_api_key(monkeypatch):

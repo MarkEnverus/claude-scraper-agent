@@ -62,8 +62,8 @@ ENDPOINTS = [
         "path": "{{ endpoint.path }}",
         "method": "{{ endpoint.method }}",
         "description": "{{ endpoint.description }}",
-        "params": {{ endpoint.params | tojson }},
-        "auth_required": {{ endpoint.auth_required | lower }},
+        "params": {{ endpoint.params | tojson | replace('true', 'True') | replace('false', 'False') | replace('null', 'None') }},
+        "auth_required": {{ endpoint.auth_required | tojson | replace('true', 'True') | replace('false', 'False') | replace('null', 'None') }},
     },
 {% endfor %}
 ]
@@ -86,26 +86,35 @@ class {{ class_name }}(BaseCollector):
 
     def __init__(
         self,
+        dgroup: str,
+        s3_bucket: str,
+        s3_prefix: str,
+        redis_client,
+        environment: str,
+        kafka_connection_string: Optional[str] = None,
+        hash_ttl_days: int = 30,
         api_key: Optional[str] = None,
-        redis_client: Optional[redis.Redis] = None,
-        s3_uploader: Optional[S3Uploader] = None,
-        kafka_producer: Optional[KafkaProducer] = None,
-        dgroup: str = "{{ dgroup }}",
     ):
         """Initialize {{ source }} collector.
 
         Args:
-            api_key: {{ auth_method }} authentication key
-            redis_client: Redis client for hash registry
-            s3_uploader: S3 manager for file uploads
-            kafka_producer: Kafka producer for notifications
             dgroup: Data group identifier
+            s3_bucket: S3 bucket name for storage
+            s3_prefix: S3 prefix for file organization
+            redis_client: Redis client for hash registry
+            environment: Environment (dev/staging/prod)
+            kafka_connection_string: Optional Kafka connection string
+            hash_ttl_days: TTL for hash registry entries
+            api_key: {{ auth_method }} authentication key
         """
         super().__init__(
-            redis_client=redis_client,
-            s3_uploader=s3_uploader,
-            kafka_producer=kafka_producer,
             dgroup=dgroup,
+            s3_bucket=s3_bucket,
+            s3_prefix=s3_prefix,
+            redis_client=redis_client,
+            environment=environment,
+            kafka_connection_string=kafka_connection_string,
+            hash_ttl_days=hash_ttl_days,
         )
 
         self.api_key = api_key

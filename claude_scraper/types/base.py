@@ -81,7 +81,7 @@ class BaseScraperConfig(BaseModel, ABC):
     implement the validate_config() method.
 
     Attributes:
-        data_source: Name of data source (e.g., "NYISO", "MISO")
+        data_source: Name of data source (e.g., "example_source_a", "example_source_b")
         data_type: Type of data (e.g., "load_forecast", "price_actual")
         update_frequency: How often data updates (e.g., "hourly", "daily")
         historical_support: Whether historical data is available

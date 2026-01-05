@@ -123,12 +123,12 @@ class ScraperFixer:
 
         Example:
             >>> result = await fixer.fix_scraper(
-            ...     scraper_path=Path("sourcing/scraping/scraper_miso.py"),
+            ...     scraper_path=Path("sourcing/scraping/scraper_example.py"),
             ...     problem="API endpoint changed",
             ...     fix_operations=[{
-            ...         "file": "sourcing/scraping/scraper_miso.py",
-            ...         "old": "https://old-api.misoenergy.org",
-            ...         "new": "https://api.misoenergy.org"
+            ...         "file": "sourcing/scraping/scraper_example.py",
+            ...         "old": "https://old-api.example.com",
+            ...         "new": "https://api.example.com"
             ...     }],
             ...     validate=True
             ... )
@@ -216,7 +216,7 @@ class ScraperFixer:
                 - recommendations: List of recommended fixes
 
         Example:
-            >>> diagnosis = fixer.diagnose_issue(Path("scraper_miso.py"))
+            >>> diagnosis = fixer.diagnose_issue(Path("scraper_example.py"))
             >>> print(diagnosis["issues"])
         """
         if not scraper_path.exists():

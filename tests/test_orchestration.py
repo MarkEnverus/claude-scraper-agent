@@ -20,10 +20,8 @@ Example:
 import pytest
 from unittest.mock import AsyncMock, MagicMock, patch
 
-from baml_client.baml_client.types import (
+from claude_scraper.types import (
     AuthenticationMethod,
-    ComplexityLevel,
-    ConfidenceLevel,
     DataSourceType,
     DocQuality,
     HTTPMethod,
@@ -35,12 +33,15 @@ from baml_client.baml_client.types import (
     ValidationOverallStatus,
     ValidationReport,
     EndpointSpec,
-    Endpoint,
-    ExecutiveSummary,
-    ValidationSummary,
     ScraperRecommendation,
     EndpointDetails,
     ValidationStatus,
+    Endpoint,
+    ExecutiveSummary,
+    ValidationSummary,
+    ComplexityLevel,
+    ScraperType,
+    ConfidenceLevel,
 )
 from claude_scraper.orchestration import (
     AnalysisState,
@@ -64,15 +65,9 @@ def mock_phase0_run1():
         confidence=0.90,
         indicators=["REST API", "JSON responses", "Swagger docs"],
         discovered_api_calls=["https://api.example.com/v1/data"],
-        endpoints=[
-            Endpoint(
-                path="/api/v1/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=False,
-                response_format=ResponseFormat.JSON,
-            )
-        ],
+        discovered_endpoint_urls=["https://api.example.com/v1/data"],
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com",
     )
 
@@ -116,6 +111,8 @@ def mock_phase3_run1():
     return ValidatedSpec(
         source="BA Analyzer",
         source_type="API",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-12-18T10:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -266,13 +263,12 @@ async def test_run1_node_success(
     state: AnalysisState = {"url": "https://api.example.com"}
 
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
-         patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator:
 
         # Mock analyzer methods
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0_run1)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1_run1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2_run1)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_run1)
@@ -347,13 +343,12 @@ async def test_run2_node_success(
     }
 
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
-         patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator:
 
         # Mock analyzer
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0_run1)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1_run1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2_run1)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_run1)
@@ -453,13 +448,12 @@ async def test_full_pipeline_with_run2(
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
          patch("claude_scraper.orchestration.nodes.BACollator") as MockCollator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock Run 1 analyzer
         mock_analyzer_run1 = MockAnalyzer.return_value
         mock_analyzer_run1.analyze_phase0 = AsyncMock(return_value=mock_phase0_run1)
+        mock_analyzer_run1.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer_run1.analyze_phase1 = AsyncMock(return_value=mock_phase1_run1)
         mock_analyzer_run1.analyze_phase2 = AsyncMock(return_value=mock_phase2_run1)
         mock_analyzer_run1.analyze_phase3 = AsyncMock(return_value=mock_phase3_run1)
@@ -519,13 +513,12 @@ async def test_full_pipeline_skip_run2(
 
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock analyzer
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0_run1)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1_run1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2_run1)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_high)
@@ -565,9 +558,7 @@ async def test_pipeline_error_in_run1():
     """Test pipeline handles errors in Run 1."""
     initial_state: AnalysisState = {"url": "https://api.example.com"}
 
-    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer:
 
         # Mock analyzer to raise error
         mock_analyzer = MockAnalyzer.return_value
@@ -611,13 +602,12 @@ async def test_checkpoint_and_resume(
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
          patch("claude_scraper.orchestration.nodes.BACollator") as MockCollator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock analyzer
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0_run1)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1_run1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2_run1)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_run1)

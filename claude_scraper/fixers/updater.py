@@ -16,6 +16,8 @@ from pathlib import Path
 from typing import List, Optional, Dict, Any, Literal
 from datetime import datetime
 
+from claude_scraper.infrastructure_manager import InfrastructureManager
+
 logger = logging.getLogger(__name__)
 
 # Current infrastructure version
@@ -92,6 +94,7 @@ class ScraperUpdater:
             if infrastructure_root
             else Path("sourcing/scraping/commons")
         )
+        self.infra_manager = InfrastructureManager()
 
         logger.info(
             "Initialized ScraperUpdater",
@@ -139,6 +142,58 @@ class ScraperUpdater:
         )
 
         return scrapers
+
+    def copy_infrastructure(self) -> bool:
+        """Copy infrastructure files to monorepo (gold standard).
+
+        This method follows the "gold standard" pattern from the original agent:
+        - Always copies infrastructure files fresh from source
+        - Overwrites existing infrastructure (no version checks)
+        - Ensures infrastructure version matches INFRASTRUCTURE_VERSION
+
+        The infrastructure IS the truth - no version checks needed.
+
+        Returns:
+            True if successful, False otherwise
+
+        Example:
+            >>> updater = ScraperUpdater()
+            >>> if updater.copy_infrastructure():
+            ...     print("Infrastructure updated to v1.6.0")
+        """
+        # Assume scraper_root is sourcing/scraping
+        # Monorepo root is sourcing/ (parent directory containing "scraping")
+        monorepo_root = None
+        if "scraping" in self.scraper_root.parts:
+            # Find the parent directory that contains "scraping"
+            for i, part in enumerate(self.scraper_root.parts):
+                if part == "scraping":
+                    monorepo_root = Path(*self.scraper_root.parts[:i])
+                    break
+
+        # Fallback: if not found or "scraping" not in path, use parent
+        if monorepo_root is None:
+            monorepo_root = self.scraper_root.parent
+
+        logger.info(
+            "Copying infrastructure (gold standard)",
+            extra={
+                "monorepo_root": str(monorepo_root),
+                "target_version": CURRENT_INFRASTRUCTURE_VERSION,
+            },
+        )
+
+        success = self.infra_manager.copy_for_monorepo(monorepo_root)
+
+        if success:
+            logger.info(
+                "Infrastructure copied successfully",
+                extra={"version": CURRENT_INFRASTRUCTURE_VERSION},
+            )
+        else:
+            logger.error("Failed to copy infrastructure")
+
+        return success
 
     def _read_scraper_info(self, scraper_path: Path) -> ScraperInfo:
         """Read version and metadata from a scraper file.
@@ -210,7 +265,7 @@ class ScraperUpdater:
 
         Example:
             >>> updater = ScraperUpdater()
-            >>> generator = updater.detect_generator_agent(Path("scraper_miso_http.py"))
+            >>> generator = updater.detect_generator_agent(Path("scraper_example_http.py"))
             >>> print(f"Generator: {generator}")
         """
         try:

@@ -5,9 +5,9 @@ analysis results with weighted confidence scoring.
 """
 
 import pytest
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
-from baml_client.types import (
+from claude_scraper.types import (
     AuthenticationMethod,
     CollationResult,
     ComplexityLevel,
@@ -15,6 +15,7 @@ from baml_client.types import (
     DataSourceType,
     Endpoint,
     EndpointDetails,
+    EndpointSpec,
     ExecutiveSummary,
     HTTPMethod,
     Phase0Detection,
@@ -42,15 +43,9 @@ def sample_phase0_run1():
         confidence=0.8,
         indicators=["REST API", "JSON responses"],
         discovered_api_calls=["https://api.example.com/v1"],
-        endpoints=[
-            Endpoint(
-                path="/v1/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=False,
-                response_format=ResponseFormat.JSON
-            )
-        ],
+        discovered_endpoint_urls=["https://api.example.com/v1/data"],
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com"
     )
 
@@ -66,22 +61,12 @@ def sample_phase0_run2():
             "https://api.example.com/v1",
             "https://api.example.com/v2"
         ],
-        endpoints=[
-            Endpoint(
-                path="/v1/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=False,
-                response_format=ResponseFormat.JSON
-            ),
-            Endpoint(
-                path="/v2/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=True,
-                response_format=ResponseFormat.JSON
-            )
+        discovered_endpoint_urls=[
+            "https://api.example.com/v1/data",
+            "https://api.example.com/v2/data"
         ],
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com"
     )
 
@@ -92,6 +77,8 @@ def sample_validated_spec_run1():
     return ValidatedSpec(
         source="Run 1 Analysis",
         source_type="api",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-12-18T10:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -148,6 +135,8 @@ def sample_validated_spec_run2():
     return ValidatedSpec(
         source="Run 2 Analysis",
         source_type="api",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-12-18T11:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -214,9 +203,12 @@ def sample_validated_spec_run2():
 
 
 @pytest.fixture
-def collator(tmp_path):
+def collator(mock_llm_provider, tmp_path):
     """Create BA Collator instance with temp directory."""
-    return BACollator(base_dir=tmp_path / "datasource_analysis")
+    return BACollator(
+        llm_provider=mock_llm_provider,
+        base_dir=tmp_path / "datasource_analysis"
+    )
 
 
 # =============================================================================
@@ -276,9 +268,9 @@ def test_calculate_weighted_confidence_rounding(collator):
     assert result == 0.855
 
 
-def test_calculate_weighted_confidence_validates_run1():
+def test_calculate_weighted_confidence_validates_run1(mock_llm_provider):
     """Test that run1_confidence out of bounds raises ValueError."""
-    collator = BACollator()
+    collator = BACollator(llm_provider=mock_llm_provider)
 
     with pytest.raises(ValueError, match="run1_confidence must be between 0.0 and 1.0"):
         collator.calculate_weighted_confidence(1.5, 0.9)
@@ -287,9 +279,9 @@ def test_calculate_weighted_confidence_validates_run1():
         collator.calculate_weighted_confidence(-0.1, 0.9)
 
 
-def test_calculate_weighted_confidence_validates_run2():
+def test_calculate_weighted_confidence_validates_run2(mock_llm_provider):
     """Test that run2_confidence out of bounds raises ValueError."""
-    collator = BACollator()
+    collator = BACollator(llm_provider=mock_llm_provider)
 
     with pytest.raises(ValueError, match="run2_confidence must be between 0.0 and 1.0"):
         collator.calculate_weighted_confidence(0.8, 1.2)
@@ -428,7 +420,7 @@ async def test_merge_phase0_weighted_confidence(
     sample_phase0_run2
 ):
     """Test Phase 0 merge uses correct weights (30% Run 1, 70% Run 2)."""
-    # Mock BAML function
+    # Mock the LLM response
     mock_merged = Phase0Detection(
         detected_type=DataSourceType.API,
         confidence=0.905,  # (0.3 * 0.8) + (0.7 * 0.95)
@@ -437,34 +429,29 @@ async def test_merge_phase0_weighted_confidence(
             "https://api.example.com/v1",
             "https://api.example.com/v2"
         ],
-        endpoints=sample_phase0_run2.endpoints,
+        discovered_endpoint_urls=sample_phase0_run2.discovered_endpoint_urls,
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com"
     )
 
-    with patch('claude_scraper.agents.ba_collator.b.MergePhase0', new_callable=AsyncMock) as mock_baml:
-        mock_baml.return_value = mock_merged
+    # Mock the LLM provider's invoke_structured method using Mock
+    collator.llm.invoke_structured = Mock(return_value=mock_merged)
 
-        result = await collator.merge_phase0(
-            run1=sample_phase0_run1,
-            run2=sample_phase0_run2,
-            run2_focus_areas=["endpoints", "api_calls"]
-        )
+    result = await collator.merge_phase0(
+        run1=sample_phase0_run1,
+        run2=sample_phase0_run2,
+        run2_focus_areas=["endpoints", "api_calls"]
+    )
 
-        # Verify BAML was called
-        mock_baml.assert_called_once_with(
-            run1=sample_phase0_run1,
-            run2=sample_phase0_run2,
-            run2_focus_areas=["endpoints", "api_calls"]
-        )
+    # Verify weighted confidence
+    expected_confidence = 0.905
+    assert abs(result.confidence - expected_confidence) < 0.01
 
-        # Verify weighted confidence
-        expected_confidence = 0.905
-        assert abs(result.confidence - expected_confidence) < 0.01
-
-        # Verify merge results
-        assert result.detected_type == DataSourceType.API
-        assert len(result.indicators) == 3  # Merged indicators
-        assert len(result.discovered_api_calls) == 2  # Merged API calls
+    # Verify merge results
+    assert result.detected_type == DataSourceType.API
+    assert len(result.indicators) == 3  # Merged indicators
+    assert len(result.discovered_api_calls) == 2  # Merged API calls
 
 
 @pytest.mark.asyncio
@@ -474,15 +461,15 @@ async def test_merge_phase0_error_handling(
     sample_phase0_run2
 ):
     """Test Phase 0 merge error handling."""
-    with patch('claude_scraper.agents.ba_collator.b.MergePhase0', new_callable=AsyncMock) as mock_baml:
-        mock_baml.side_effect = Exception("BAML merge failed")
+    # Mock the LLM provider to raise an exception using Mock
+    collator.llm.invoke_structured = Mock(side_effect=Exception("LLM merge failed"))
 
-        with pytest.raises(Exception, match="BAML merge failed"):
-            await collator.merge_phase0(
-                run1=sample_phase0_run1,
-                run2=sample_phase0_run2,
-                run2_focus_areas=[]
-            )
+    with pytest.raises(Exception, match="LLM merge failed"):
+        await collator.merge_phase0(
+            run1=sample_phase0_run1,
+            run2=sample_phase0_run2,
+            run2_focus_areas=[]
+        )
 
 
 # =============================================================================
@@ -490,9 +477,9 @@ async def test_merge_phase0_error_handling(
 # =============================================================================
 
 @pytest.mark.asyncio
-async def test_weighted_confidence_with_consistency_bonus():
+async def test_weighted_confidence_with_consistency_bonus(mock_llm_provider):
     """Test that consistency bonus is applied when runs are highly consistent."""
-    collator = BACollator()
+    collator = BACollator(llm_provider=mock_llm_provider)
 
     # Runs with similar confidence (difference = 0.05 < 0.1)
     run1_confidence = 0.85
@@ -518,31 +505,25 @@ async def test_merge_complete_specs(
     sample_validated_spec_run2
 ):
     """Test complete specification merge."""
-    # Mock BAML function
+    # Create mock merged result
     mock_merged = sample_validated_spec_run2
     mock_merged.validation_summary.final_confidence_score = 0.905
     mock_merged.validation_summary.collation_complete = True
     mock_merged.validation_summary.runs_analyzed = 2
 
-    with patch('claude_scraper.agents.ba_collator.b.MergeCompleteSpecs', new_callable=AsyncMock) as mock_baml:
-        mock_baml.return_value = mock_merged
+    # Mock the LLM provider's invoke_structured method using Mock
+    collator.llm.invoke_structured = Mock(return_value=mock_merged)
 
-        result = await collator.merge_complete_specs(
-            run1=sample_validated_spec_run1,
-            run2=sample_validated_spec_run2,
-            save_result=False  # Don't save during test
-        )
+    result = await collator.merge_complete_specs(
+        run1=sample_validated_spec_run1,
+        run2=sample_validated_spec_run2,
+        save_result=False  # Don't save during test
+    )
 
-        # Verify BAML was called
-        mock_baml.assert_called_once_with(
-            run1=sample_validated_spec_run1,
-            run2=sample_validated_spec_run2
-        )
-
-        # Verify collation metadata
-        assert result.validation_summary.collation_complete is True
-        assert result.validation_summary.runs_analyzed == 2
-        assert result.validation_summary.final_confidence_score == 0.905
+    # Verify collation metadata
+    assert result.validation_summary.collation_complete is True
+    assert result.validation_summary.runs_analyzed == 2
+    assert result.validation_summary.final_confidence_score == 0.905
 
 
 @pytest.mark.asyncio
@@ -555,17 +536,17 @@ async def test_merge_complete_specs_saves_result(
     mock_merged = sample_validated_spec_run2
     mock_merged.validation_summary.final_confidence_score = 0.905
 
-    with patch('claude_scraper.agents.ba_collator.b.MergeCompleteSpecs', new_callable=AsyncMock) as mock_baml:
-        mock_baml.return_value = mock_merged
+    # Mock the LLM provider's invoke_structured method using Mock
+    collator.llm.invoke_structured = Mock(return_value=mock_merged)
 
-        result = await collator.merge_complete_specs(
-            run1=sample_validated_spec_run1,
-            run2=sample_validated_spec_run2,
-            save_result=True
-        )
+    result = await collator.merge_complete_specs(
+        run1=sample_validated_spec_run1,
+        run2=sample_validated_spec_run2,
+        save_result=True
+    )
 
-        # Verify file was saved
-        assert collator.repository.exists("final_validated_spec.json")
+    # Verify file was saved
+    assert collator.repository.exists("final_validated_spec.json")
 
 
 @pytest.mark.asyncio
@@ -575,42 +556,42 @@ async def test_merge_complete_specs_error_handling(
     sample_validated_spec_run2
 ):
     """Test complete spec merge error handling."""
-    with patch('claude_scraper.agents.ba_collator.b.MergeCompleteSpecs', new_callable=AsyncMock) as mock_baml:
-        mock_baml.side_effect = Exception("Merge failed")
+    # Mock the LLM provider to raise an exception using Mock
+    collator.llm.invoke_structured = Mock(side_effect=Exception("Merge failed"))
 
-        with pytest.raises(Exception, match="Merge failed"):
-            await collator.merge_complete_specs(
-                run1=sample_validated_spec_run1,
-                run2=sample_validated_spec_run2,
-                save_result=False
-            )
+    with pytest.raises(Exception, match="Merge failed"):
+        await collator.merge_complete_specs(
+            run1=sample_validated_spec_run1,
+            run2=sample_validated_spec_run2,
+            save_result=False
+        )
 
 
 # =============================================================================
 # Unit Tests: Initialization
 # =============================================================================
 
-def test_collator_initialization_default():
+def test_collator_initialization_default(mock_llm_provider):
     """Test collator initialization with default repository."""
-    collator = BACollator()
+    collator = BACollator(llm_provider=mock_llm_provider)
 
     assert collator.RUN1_WEIGHT == 0.3
     assert collator.RUN2_WEIGHT == 0.7
     assert collator.repository is not None
 
 
-def test_collator_initialization_custom_repo(tmp_path):
+def test_collator_initialization_custom_repo(mock_llm_provider, tmp_path):
     """Test collator initialization with custom repository."""
     repo = AnalysisRepository(tmp_path / "custom_analysis")
-    collator = BACollator(repository=repo)
+    collator = BACollator(llm_provider=mock_llm_provider, repository=repo)
 
     assert collator.repository == repo
 
 
-def test_collator_initialization_custom_base_dir(tmp_path):
+def test_collator_initialization_custom_base_dir(mock_llm_provider, tmp_path):
     """Test collator initialization with custom base directory."""
     custom_dir = tmp_path / "my_analysis"
-    collator = BACollator(base_dir=custom_dir)
+    collator = BACollator(llm_provider=mock_llm_provider, base_dir=custom_dir)
 
     assert str(custom_dir) in str(collator.repository.base_dir)
 

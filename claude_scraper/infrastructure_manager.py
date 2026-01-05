@@ -48,6 +48,34 @@ class InfrastructureManager:
 
         logger.info(f"Initialized InfrastructureManager: source={self.source}")
 
+    def should_copy_commons(self, output_dir: Path) -> bool:
+        """Check if we need to copy commons infrastructure.
+
+        Only copy if monorepo doesn't exist (no sourcing/commons/).
+        Checks multiple standard locations for existing commons.
+
+        Args:
+            output_dir: Target directory for scraper generation
+
+        Returns:
+            True if commons should be copied, False if already exists
+        """
+        # Check for existing commons directory in standard locations
+        commons_paths = [
+            output_dir / "sourcing" / "commons",
+            output_dir / "commons",
+            output_dir.parent / "commons",
+            output_dir.parent / "sourcing" / "commons",
+        ]
+
+        for path in commons_paths:
+            if path.exists() and (path / "collection_framework.py").exists():
+                logger.info(f"Found existing commons at {path}, skipping copy")
+                return False
+
+        logger.info("No existing commons found, will copy infrastructure")
+        return True
+
     def bundle_for_scraper(self, output_dir: Path) -> bool:
         """Bundle infrastructure into a generated scraper directory.
 
@@ -135,6 +163,11 @@ class InfrastructureManager:
         Returns:
             True if successful, False otherwise
         """
+        # Check if we should skip copying (commons already exists)
+        if not self.should_copy_commons(monorepo_root):
+            logger.info("Using existing commons infrastructure")
+            return True
+
         commons_dir = monorepo_root / "scraping" / "commons"
         copied_files: list[Path] = []
         backup_files: list[tuple[Path, Path]] = []

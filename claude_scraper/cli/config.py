@@ -39,11 +39,12 @@ class Config:
                 )
 
     @classmethod
-    def from_env(cls, provider: Literal["bedrock", "anthropic"] = "bedrock") -> "Config":
+    def from_env(cls, provider: Literal["bedrock", "anthropic"] = "anthropic") -> "Config":
         """Load configuration from environment variables
 
         Args:
             provider: LLM provider to use ('bedrock' or 'anthropic')
+                     Default: 'anthropic' (Bedrock is deprecated)
 
         Returns:
             Config: Configured instance
@@ -52,10 +53,17 @@ class Config:
             ValueError: If provider is unknown or required env vars are missing
         """
         if provider == "bedrock":
+            import warnings
+            warnings.warn(
+                "Bedrock provider is deprecated due to lack of native structured output support. "
+                "Please use Anthropic API instead. Bedrock support will be removed in v3.0.0.",
+                DeprecationWarning,
+                stacklevel=2
+            )
             return cls(
                 provider="bedrock",
                 model_id=os.getenv(
-                    "BEDROCK_MODEL_ID", "anthropic.claude-sonnet-4-5-20250929-v1:0"
+                    "BEDROCK_MODEL_ID", "anthropic.claude-3-5-sonnet-20240620-v1:0"
                 ),
                 region=os.getenv("AWS_REGION", "us-west-2"),
                 api_key=None,

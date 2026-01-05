@@ -45,12 +45,32 @@ class VariableTransformer:
         source_clean = self._clean_source_name(source)
         data_type = self._infer_data_type(ba_spec)
 
-        # Dataset extraction: Currently expects 'dataset' field to be present in BA spec.
-        # NOTE: This field is NOT part of the standard ValidatedSpec schema and must be
-        # manually added to BA specs until the BA agent is updated to automatically infer
-        # dataset names during analysis. Fallback to "data" if not provided.
-        # Future: BA agent should infer dataset from endpoint patterns or data catalog.
-        dataset = ba_spec.get("dataset", "data")
+        # Datasource and Dataset extraction
+        # PREFERRED: BA Analyst should provide 'datasource' and 'dataset' fields explicitly
+        # FALLBACK: Derive from source name and endpoint info
+        # FUTURE: Add AI-based extraction using BAML when fields are missing
+
+        datasource = ba_spec.get("datasource")
+        if not datasource:
+            # Fallback: Extract short identifier from source name
+            # Example: "Example Weather API" -> "example"
+            datasource = source_clean.split()[0].lower() if source_clean else "unknown"
+            import logging
+            logging.warning(
+                f"BA spec missing 'datasource' field, derived '{datasource}' from source name. "
+                "BA Analyst should provide explicit 'datasource' field."
+            )
+
+        dataset = ba_spec.get("dataset")
+        if not dataset:
+            # Fallback: Use "data" as default
+            # Example: For multi-endpoint specs, orchestrator should set this per-endpoint
+            dataset = "data"
+            import logging
+            logging.warning(
+                f"BA spec missing 'dataset' field, using fallback '{dataset}'. "
+                "BA Analyst should provide explicit 'dataset' field or orchestrator should set per-endpoint."
+            )
 
         return {
             # Basic identification
@@ -58,6 +78,8 @@ class VariableTransformer:
             "source_lower": source_clean.lower(),
             "source_upper": source_clean.upper(),
             "source_snake": self._to_snake_case(source_clean),
+            "datasource": datasource,
+            "datasource_snake": self._to_snake_case(datasource),
             "data_type": data_type,
             "data_type_lower": data_type.lower(),
             "data_type_snake": self._to_snake_case(data_type),
@@ -170,7 +192,7 @@ class VariableTransformer:
     def _generate_class_name(self, source: str, data_type: str) -> str:
         """Generate CamelCase class name.
 
-        Example: "MISO", "energy_pricing" -> "MISOEnergyPricingCollector"
+        Example: "Example", "weather_data" -> "ExampleWeatherDataCollector"
         """
         source_camel = self._to_camel_case(source)
         data_type_camel = self._to_camel_case(data_type)
@@ -179,7 +201,7 @@ class VariableTransformer:
     def _generate_dgroup(self, source: str, data_type: str) -> str:
         """Generate dgroup identifier.
 
-        Example: "MISO", "energy_pricing" -> "miso_energy_pricing"
+        Example: "Example", "weather_data" -> "example_weather_data"
         """
         source_snake = self._to_snake_case(source)
         data_type_snake = self._to_snake_case(data_type)
@@ -195,7 +217,7 @@ class VariableTransformer:
     def _generate_auth_env_var(self, source: str) -> str:
         """Generate environment variable name for authentication.
 
-        Example: "MISO" -> "MISO_API_KEY"
+        Example: "Example" -> "EXAMPLE_API_KEY"
         """
         source_upper = self._to_snake_case(source).upper()
         return f"{source_upper}_API_KEY"

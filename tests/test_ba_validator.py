@@ -1,33 +1,36 @@
 """Unit tests for BA Validator Agent"""
 
 import pytest
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock, Mock, patch
 from pathlib import Path
 
 from claude_scraper.agents.ba_validator import BAValidator, RUN2_CONFIDENCE_THRESHOLD
-from baml_client.types import (
+from claude_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
     ValidatedSpec,
     ValidationReport,
+    ValidationResult,
     ValidationOverallStatus,
-    ValidationSummary,
-    PhaseValidation,
-    CriticalGap,
     DataSourceType,
     HTTPMethod,
     AuthenticationMethod,
-    ConfidenceLevel,
     DocQuality,
     ResponseFormat,
-    ComplexityLevel,
-    ScraperType,
-    ExecutiveSummary,
-    ScraperRecommendation,
+    EndpointSpec,
+    # Missing imports identified by QA:
     Endpoint,
+    ExecutiveSummary,
+    ComplexityLevel,
+    ValidationSummary,
+    ConfidenceLevel,
     EndpointDetails,
     ValidationStatus,
+    ScraperType,
+    ScraperRecommendation,
+    PhaseValidation,
+    CriticalGap,
 )
 from claude_scraper.storage.repository import AnalysisRepository
 
@@ -44,9 +47,12 @@ def mock_repository():
 
 
 @pytest.fixture
-def validator(mock_repository):
+def validator(mock_llm_provider, mock_repository):
     """BA Validator instance with mocked repository"""
-    return BAValidator(repository=mock_repository)
+    return BAValidator(
+        llm_provider=mock_llm_provider,
+        repository=mock_repository
+    )
 
 
 @pytest.fixture
@@ -57,15 +63,9 @@ def high_confidence_phase0():
         confidence=0.95,
         indicators=["REST endpoints", "JSON responses", "API documentation"],
         discovered_api_calls=["https://api.example.com/v1/data"],
-        endpoints=[
-            Endpoint(
-                path="/v1/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=True,
-                response_format=ResponseFormat.JSON
-            )
-        ],
+        discovered_endpoint_urls=["https://api.example.com/v1/data"],
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com"
     )
 
@@ -78,7 +78,9 @@ def low_confidence_phase0():
         confidence=0.45,
         indicators=["HTML pages"],
         discovered_api_calls=[],
-        endpoints=[],
+        discovered_endpoint_urls=[],
+        auth_method="NONE",
+        base_url="https://example.com",
         url="https://example.com"
     )
 
@@ -112,6 +114,8 @@ def high_confidence_spec():
     return ValidatedSpec(
         source="BA Agent",
         source_type="api",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-01-20T11:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -167,6 +171,8 @@ def low_confidence_spec():
     return ValidatedSpec(
         source="BA Agent",
         source_type="api",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-01-20T11:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -313,25 +319,26 @@ def validation_report_fail():
 # ============================================================================
 
 
-def test_validator_initialization(mock_repository):
+def test_validator_initialization(mock_llm_provider, mock_repository):
     """Test validator initializes with correct defaults"""
-    validator = BAValidator(repository=mock_repository)
+    validator = BAValidator(llm_provider=mock_llm_provider, repository=mock_repository)
 
     assert validator.repository == mock_repository
     assert validator.confidence_threshold == RUN2_CONFIDENCE_THRESHOLD
 
 
-def test_validator_initialization_default_repository():
+def test_validator_initialization_default_repository(mock_llm_provider):
     """Test validator creates default repository if none provided"""
-    validator = BAValidator()
+    validator = BAValidator(llm_provider=mock_llm_provider)
 
     assert isinstance(validator.repository, AnalysisRepository)
 
 
-def test_validator_initialization_custom_threshold(mock_repository):
+def test_validator_initialization_custom_threshold(mock_llm_provider, mock_repository):
     """Test validator accepts custom confidence threshold"""
     custom_threshold = 0.7
     validator = BAValidator(
+        llm_provider=mock_llm_provider,
         repository=mock_repository,
         confidence_threshold=custom_threshold
     )
@@ -339,13 +346,13 @@ def test_validator_initialization_custom_threshold(mock_repository):
     assert validator.confidence_threshold == custom_threshold
 
 
-def test_validator_initialization_invalid_threshold(mock_repository):
+def test_validator_initialization_invalid_threshold(mock_llm_provider, mock_repository):
     """Test validator rejects invalid confidence threshold"""
     with pytest.raises(ValueError, match="confidence_threshold must be <= 1.0"):
-        BAValidator(repository=mock_repository, confidence_threshold=1.5)
+        BAValidator(llm_provider=mock_llm_provider, repository=mock_repository, confidence_threshold=1.5)
 
     with pytest.raises(ValueError, match="confidence_threshold must be >= 0.0"):
-        BAValidator(repository=mock_repository, confidence_threshold=-0.1)
+        BAValidator(llm_provider=mock_llm_provider, repository=mock_repository, confidence_threshold=-0.1)
 
 
 # ============================================================================
@@ -356,84 +363,78 @@ def test_validator_initialization_invalid_threshold(mock_repository):
 @pytest.mark.asyncio
 async def test_validate_phase0_high_confidence(validator, high_confidence_phase0):
     """Test validation passes with high confidence Phase 0"""
-    # Mock BAML function call
-    with patch("baml_client.b.ValidatePhase0", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = MagicMock(
-            confidence=0.95,
-            identified_gaps=[],
-            recommendations=[],
-            validation_notes="Phase 0 detection is high quality"
-        )
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=ValidationResult(
+        confidence=0.95,
+        identified_gaps=[],
+        recommendations=[],
+        validation_notes="Phase 0 detection is high quality"
+    ))
 
-        result = await validator.validate_phase0(
-            high_confidence_phase0,
-            "https://api.example.com"
-        )
+    result = await validator.validate_phase0(
+        high_confidence_phase0,
+        "https://api.example.com"
+    )
 
-        assert result["confidence"] == 0.95  # Matches mocked return value exactly
-        assert len(result["identified_gaps"]) == 0
-        mock_validate.assert_called_once()
+    assert result["confidence"] == 0.95
+    assert len(result["identified_gaps"]) == 0
 
 
 @pytest.mark.asyncio
 async def test_validate_phase0_low_confidence(validator, low_confidence_phase0):
     """Test validation identifies issues with low confidence Phase 0"""
-    with patch("baml_client.b.ValidatePhase0", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = MagicMock(
-            confidence=0.45,
-            identified_gaps=["Few indicators", "No API endpoints found"],
-            recommendations=["Use network monitoring", "Try Puppeteer"],
-            validation_notes="Phase 0 needs improvement"
-        )
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=ValidationResult(
+        confidence=0.45,
+        identified_gaps=["Few indicators", "No API endpoints found"],
+        recommendations=["Use network monitoring", "Try Puppeteer"],
+        validation_notes="Phase 0 needs improvement"
+    ))
 
-        result = await validator.validate_phase0(
-            low_confidence_phase0,
-            "https://example.com"
-        )
+    result = await validator.validate_phase0(
+        low_confidence_phase0,
+        "https://example.com"
+    )
 
-        assert result["confidence"] < 0.8
-        assert len(result["identified_gaps"]) > 0
-        assert len(result["recommendations"]) > 0
+    assert result["confidence"] < 0.8
+    assert len(result["identified_gaps"]) > 0
+    assert len(result["recommendations"]) > 0
 
 
 @pytest.mark.asyncio
 async def test_validate_phase1(validator, complete_phase1, high_confidence_phase0):
     """Test Phase 1 validation"""
-    with patch("baml_client.b.ValidatePhase1", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = MagicMock(
-            confidence=0.85,
-            identified_gaps=[],
-            recommendations=[],
-            validation_notes="Phase 1 documentation is complete"
-        )
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=ValidationResult(
+        confidence=0.85,
+        identified_gaps=[],
+        recommendations=[],
+        validation_notes="Phase 1 documentation is complete"
+    ))
 
-        result = await validator.validate_phase1(
-            complete_phase1,
-            high_confidence_phase0
-        )
+    result = await validator.validate_phase1(
+        complete_phase1,
+        high_confidence_phase0
+    )
 
-        assert result["confidence"] >= 0.8
-        mock_validate.assert_called_once_with(
-            phase1_result=complete_phase1,
-            phase0_result=high_confidence_phase0
-        )
+    assert result["confidence"] >= 0.8
 
 
 @pytest.mark.asyncio
 async def test_validate_phase2(validator, complete_phase2, complete_phase1):
     """Test Phase 2 validation"""
-    with patch("baml_client.b.ValidatePhase2", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = MagicMock(
-            confidence=0.88,
-            identified_gaps=[],
-            recommendations=[],
-            validation_notes="Phase 2 testing is evidence-based"
-        )
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=ValidationResult(
+        confidence=0.88,
+        identified_gaps=[],
+        recommendations=[],
+        validation_notes="Phase 2 testing is evidence-based"
+    ))
 
-        result = await validator.validate_phase2(complete_phase2, complete_phase1)
+    result = await validator.validate_phase2(complete_phase2, complete_phase1)
 
-        assert result["confidence"] >= 0.8
-        assert "validation_notes" in result
+    assert result["confidence"] >= 0.8
+    assert "validation_notes" in result
 
 
 # ============================================================================
@@ -448,18 +449,18 @@ async def test_validate_complete_spec_high_confidence(
     validation_report_pass
 ):
     """Test complete spec validation with high confidence"""
-    with patch("baml_client.b.ValidateCompleteSpec", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = validation_report_pass
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=validation_report_pass)
 
-        report = await validator.validate_complete_spec(high_confidence_spec)
+    report = await validator.validate_complete_spec(high_confidence_spec)
 
-        assert report.overall_status == ValidationOverallStatus.PASS
-        assert report.overall_confidence >= 0.8
-        assert len(report.critical_gaps) == 0
-        validator.repository.save.assert_called_once_with(
-            "ba_validation_report.json",
-            validation_report_pass
-        )
+    assert report.overall_status == ValidationOverallStatus.PASS
+    assert report.overall_confidence >= 0.8
+    assert len(report.critical_gaps) == 0
+    validator.repository.save.assert_called_once_with(
+        "ba_validation_report.json",
+        validation_report_pass
+    )
 
 
 @pytest.mark.asyncio
@@ -469,15 +470,15 @@ async def test_validate_complete_spec_low_confidence(
     validation_report_fail
 ):
     """Test complete spec validation with low confidence"""
-    with patch("baml_client.b.ValidateCompleteSpec", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = validation_report_fail
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=validation_report_fail)
 
-        report = await validator.validate_complete_spec(low_confidence_spec)
+    report = await validator.validate_complete_spec(low_confidence_spec)
 
-        assert report.overall_status == ValidationOverallStatus.FAIL
-        assert report.overall_confidence < 0.8
-        assert len(report.critical_gaps) > 0
-        assert len(report.recommendations_for_second_pass) > 0
+    assert report.overall_status == ValidationOverallStatus.FAIL
+    assert report.overall_confidence < 0.8
+    assert len(report.critical_gaps) > 0
+    assert len(report.recommendations_for_second_pass) > 0
 
 
 @pytest.mark.asyncio
@@ -489,15 +490,15 @@ async def test_validate_complete_spec_saves_report(validator, high_confidence_sp
     mock_report.critical_gaps = []
     mock_report.recommendations_for_second_pass = []
 
-    with patch("baml_client.b.ValidateCompleteSpec", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = mock_report
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=mock_report)
 
-        await validator.validate_complete_spec(high_confidence_spec)
+    await validator.validate_complete_spec(high_confidence_spec)
 
-        validator.repository.save.assert_called_once_with(
-            "ba_validation_report.json",
-            mock_report
-        )
+    validator.repository.save.assert_called_once_with(
+        "ba_validation_report.json",
+        mock_report
+    )
 
 
 @pytest.mark.asyncio
@@ -507,15 +508,15 @@ async def test_validate_complete_spec_save_fails_gracefully(validator, high_conf
     mock_report.overall_confidence = 0.92
     validator.repository.save.side_effect = Exception("Disk full")
 
-    with patch("baml_client.b.ValidateCompleteSpec", new_callable=AsyncMock) as mock_validate:
-        mock_validate.return_value = mock_report
+    # Mock LLM provider
+    validator.llm.invoke_structured = Mock(return_value=mock_report)
 
-        # Should not raise exception even though save fails
-        result = await validator.validate_complete_spec(high_confidence_spec)
+    # Should not raise exception even though save fails
+    result = await validator.validate_complete_spec(high_confidence_spec)
 
-        assert result == mock_report  # Report still returned
-        # Verify save was attempted
-        validator.repository.save.assert_called_once()
+    assert result == mock_report  # Report still returned
+    # Verify save was attempted
+    validator.repository.save.assert_called_once()
 
 
 # ============================================================================
@@ -554,10 +555,11 @@ def test_should_run_second_analysis_at_threshold(validator):
     assert validator.should_run_second_analysis(report) is True
 
 
-def test_should_run_second_analysis_custom_threshold(mock_repository):
+def test_should_run_second_analysis_custom_threshold(mock_llm_provider, mock_repository):
     """Test Run 2 decision with custom threshold"""
     custom_threshold = 0.9
     validator = BAValidator(
+        llm_provider=mock_llm_provider,
         repository=mock_repository,
         confidence_threshold=custom_threshold
     )

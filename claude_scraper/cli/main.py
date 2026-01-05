@@ -47,8 +47,8 @@ def cli() -> None:
 @click.option(
     "--provider",
     type=click.Choice(["bedrock", "anthropic"]),
-    default="bedrock",
-    help="LLM provider to use (default: bedrock)",
+    default="anthropic",
+    help="LLM provider to use (default: anthropic)",
 )
 @click.option(
     "--output-dir",
@@ -97,6 +97,16 @@ def analyze(url: str, provider: str, output_dir: str, debug: bool) -> None:
         # Load configuration
         config = Config.from_env(provider)  # type: ignore[arg-type]  # click validates choices
 
+        # Show deprecation warning only when Bedrock is explicitly chosen
+        if provider == "bedrock":
+            import warnings
+            warnings.warn(
+                "Bedrock provider is deprecated due to lack of native structured output support. "
+                "Please use Anthropic API instead. Bedrock support will be removed in v3.0.0.",
+                DeprecationWarning,
+                stacklevel=2
+            )
+
         if debug:
             console.print(f"[dim]Provider: {config.provider} ({config.model_id})[/dim]")
             console.print(f"[dim]Region: {config.region}[/dim]")
@@ -108,7 +118,7 @@ def analyze(url: str, provider: str, output_dir: str, debug: bool) -> None:
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
         # Run analysis with progress tracking
-        asyncio.run(run_analysis(url, output_dir, debug))
+        asyncio.run(run_analysis(url, output_dir, config.provider, debug))
 
     except ValueError as e:
         console.print(f"\n[bold red]Configuration Error:[/bold red] {e}")
@@ -125,12 +135,13 @@ def analyze(url: str, provider: str, output_dir: str, debug: bool) -> None:
         raise click.Abort()
 
 
-async def run_analysis(url: str, output_dir: str, debug: bool) -> None:
+async def run_analysis(url: str, output_dir: str, provider: str, debug: bool) -> None:
     """Execute the analysis pipeline with progress tracking.
 
     Args:
         url: Data source URL to analyze
         output_dir: Output directory for analysis files
+        provider: LLM provider to use (anthropic or bedrock)
         debug: Enable debug output
     """
     with Progress(
@@ -167,7 +178,8 @@ async def run_analysis(url: str, output_dir: str, debug: bool) -> None:
             # Execute pipeline
             state: AnalysisState = {
                 "url": url,
-                "output_dir": output_dir
+                "output_dir": output_dir,
+                "provider": provider
             }
 
             # Stream pipeline execution
@@ -292,9 +304,9 @@ async def run_analysis(url: str, output_dir: str, debug: bool) -> None:
             if qa_results:
                 console.print(
                     f"[bold]QA Results:[/bold] "
-                    f"{qa_results['keep']} kept, "
-                    f"{qa_results['remove']} removed, "
-                    f"{qa_results['flag']} flagged"
+                    f"{qa_results.keep} kept, "
+                    f"{qa_results.remove} removed, "
+                    f"{qa_results.flag} flagged"
                 )
 
             # Output files
@@ -428,21 +440,24 @@ def generate(
 
         # Display results
         console.print(f"\n[bold green]✓ Scraper generation complete![/bold green]\n")
-        console.print(f"[bold]Generated files:[/bold]")
-        console.print(f"  Scraper: {result.generated_files.scraper_path}")
-        console.print(f"  Tests: {result.generated_files.test_path}")
-        console.print(f"  README: {result.generated_files.readme_path}")
 
-        console.print(f"\n[bold]Metadata:[/bold]")
-        console.print(f"  Source: {result.generated_files.metadata['source']}")
-        console.print(f"  Data type: {result.generated_files.metadata['data_type']}")
-        console.print(f"  Collection method: {result.generated_files.metadata['collection_method']}")
-        console.print(f"  AI generated: {result.generated_files.metadata['ai_generated']}")
+        # Display generated scrapers (supports multi-scraper generation)
+        console.print(f"[bold]Generated {len(result.generated_files)} scraper(s):[/bold]")
+        for i, generated_file in enumerate(result.generated_files, 1):
+            console.print(f"\n[cyan]Scraper {i}:[/cyan]")
+            console.print(f"  Scraper: {generated_file.scraper_path}")
+            console.print(f"  Tests: {generated_file.test_path}")
+            console.print(f"  README: {generated_file.readme_path}")
+            console.print(f"  Metadata:")
+            console.print(f"    Source: {generated_file.metadata['source']}")
+            console.print(f"    Data type: {generated_file.metadata['data_type']}")
+            console.print(f"    Collection method: {generated_file.metadata['collection_method']}")
+            console.print(f"    AI generated: {generated_file.metadata['ai_generated']}")
 
         console.print(f"\n[bold green]Next steps:[/bold green]")
-        console.print(f"1. Review generated scraper: {result.generated_files.scraper_path}")
-        console.print(f"2. Run tests: pytest {result.generated_files.test_path}")
-        console.print(f"3. Configure credentials if needed (see README)")
+        console.print(f"1. Review generated scrapers in: {result.generated_files[0].scraper_path.parent}")
+        console.print(f"2. Run tests: pytest tests/")
+        console.print(f"3. Configure credentials if needed (see README files)")
 
     except (BAAnalysisError, GenerationError) as e:
         console.print(f"\n[bold red]Generation failed:[/bold red] {e}")
@@ -499,10 +514,10 @@ def fix(
         claude-scraper fix
 
         # Fix specific scraper
-        claude-scraper fix --scraper sourcing/scraping/scraper_miso_http.py
+        claude-scraper fix --scraper sourcing/scraping/scraper_example_http.py
 
         # Skip validation
-        claude-scraper fix --scraper scraper_miso.py --no-validate
+        claude-scraper fix --scraper scraper_example.py --no-validate
     """
     try:
         # Setup logging

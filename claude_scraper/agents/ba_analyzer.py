@@ -259,6 +259,15 @@ class BAAnalyzer:
         import re
         operation_names = []
 
+        # FIX Phase 2: Tech term blacklist - skip generic documentation terms
+        # These terms link to API documentation but aren't actual operations
+        tech_term_blacklist = {
+            'wadl', 'json', 'xml', 'rest', 'soap', 'oauth', 'yaml',
+            'swagger', 'openapi', 'api', 'authentication', 'authorization',
+            'basic authentication', 'token', 'jwt', 'ssl', 'tls', 'https',
+            'api documentation', 'getting started', 'overview', 'reference'
+        }
+
         # FIX #3: Extract operation names from ALL pages (not just first page)
         # FIX #5: Reduce skip_terms to only true UI chrome (remove 'documentation', etc.)
         if all_pages_data:
@@ -270,34 +279,78 @@ class BAAnalyzer:
 
             logger.info(f"Collected {len(all_nav_links)} total navigation links from {len(all_pages_data)} pages")
 
-            # Deduplicate by link text using Set (O(1) lookup)
-            seen_texts = set()
+            # FIX Phase 3b: Categorize links by type (REST paths = high priority)
+            rest_path_links = []  # High priority: /api/, /actualinterchange, etc.
+            operation_links = []  # Medium priority: descriptive operation text
+            other_links = []
+
             for link in all_nav_links:
                 link_text = link.get('text', '').strip()
+                href = link.get('href', '').strip()
 
-                # Include links that look like operations (not too long, not navigation UI elements)
-                if link_text and len(link_text) < 100 and len(link_text.split()) <= 8:
-                    # Skip ONLY true UI chrome elements (not documentation/reference)
-                    skip_terms = ['home', 'about', 'contact', 'login', 'sign up', 'logout']
+                # Skip ONLY true UI chrome elements
+                skip_terms = ['home', 'about', 'contact', 'login', 'sign up', 'logout']
 
-                    if not any(term in link_text.lower() for term in skip_terms):
-                        if link_text not in seen_texts:
-                            seen_texts.add(link_text)
-                            operation_names.append(link_text)
+                # Skip tech terms that link to documentation
+                link_text_lower = link_text.lower()
+                if link_text_lower in tech_term_blacklist:
+                    logger.debug(f"Skipping tech term: {link_text}")
+                    continue
 
-            logger.info(f"Found {len(operation_names)} potential operation names from navigation: {operation_names[:10]}")
+                if any(term in link_text_lower for term in skip_terms):
+                    continue
+
+                # Category 1: REST path links (HIGH PRIORITY)
+                if href and href.startswith('/') and not href.startswith('//'):
+                    # Check if it looks like an API path
+                    path_lower = href.lower()
+                    api_indicators = ['/api/', 'interchange', 'demand', 'price', 'load',
+                                     'generation', 'market', 'forecast', 'schedule']
+                    if any(indicator in path_lower for indicator in api_indicators):
+                        rest_path_links.append((link_text or href, href))
+                        continue
+
+                # Category 2: Operation description links (MEDIUM PRIORITY)
+                if link_text and len(link_text) < 100 and len(link_text.split()) >= 2:
+                    operation_links.append((link_text, href))
+                elif link_text and len(link_text) < 100:
+                    other_links.append((link_text, href))
+
+            logger.info(f"Categorized links: {len(rest_path_links)} REST paths, "
+                       f"{len(operation_links)} operations, {len(other_links)} other")
+
+            # FIX Phase 3b: Process in priority order
+            seen_texts = set()
+            for link_text, href in rest_path_links + operation_links:
+                if link_text and link_text not in seen_texts:
+                    seen_texts.add(link_text)
+                    operation_names.append(link_text)
+
+            logger.info(f"Found {len(operation_names)} potential operation names from navigation "
+                       f"(including {len(rest_path_links)} REST paths): {operation_names[:10]}")
 
         # FIX #11: Phase 3 - Try Swagger/OpenAPI/WADL spec parsing FIRST (most reliable)
+        # FIX Phase 3a: Read auth credentials from environment variables
         logger.info("=== ATTEMPTING PHASE 3: SWAGGER/OPENAPI/WADL SPEC PARSING ===")
-        spec_data = self.botasaurus.try_fetch_api_spec(url)
+        import os
+        auth_user = os.getenv('API_SPEC_AUTH_USER')
+        auth_pass = os.getenv('API_SPEC_AUTH_PASS')
+        if auth_user and auth_pass:
+            logger.info(f"Using HTTP Basic Auth for spec parsing (user: {auth_user})")
+        spec_data = self.botasaurus.try_fetch_api_spec(
+            url,
+            auth_username=auth_user,
+            auth_password=auth_pass
+        )
 
         if spec_data:
             logger.info(f"✅ Found {spec_data['spec_type']} specification:")
             logger.info(f"  - Spec URL: {spec_data['spec_url']}")
             logger.info(f"  - Endpoints: {len(spec_data['endpoints'])}")
 
-            # Use spec endpoints as discovered URLs (100% accurate!)
-            discovered_endpoint_urls = spec_data['endpoints']
+            # FIX Phase 1: AUGMENT instead of REPLACE - merge spec endpoints with vision's discoveries
+            discovered_endpoint_urls.extend(spec_data['endpoints'])
+            logger.info(f"Added {len(spec_data['endpoints'])} endpoints from spec parsing")
 
             # Skip operation clicking - we have authoritative spec
             logger.info("✅ Using spec as authoritative source - skipping operation clicking")
@@ -365,9 +418,10 @@ class BAAnalyzer:
 
                                 # Use vision-extracted operations
                                 operation_names = [op['name'] for op in vision_extracted_operations]
-                                discovered_endpoint_urls = [op['url'] for op in vision_extracted_operations]
-
-                                logger.info(f"✅ Using vision-extracted operations, skipping fallback methods")
+                                # FIX Phase 1: AUGMENT instead of REPLACE - merge vision URLs with previous discoveries
+                                new_urls = [op['url'] for op in vision_extracted_operations]
+                                discovered_endpoint_urls.extend(new_urls)
+                                logger.info(f"Added {len(new_urls)} endpoints from vision portal analysis")
 
                         finally:
                             if driver:
@@ -417,9 +471,11 @@ class BAAnalyzer:
                     actual_urls_map = self.botasaurus.extract_operation_urls(url, operation_names)
 
                     if actual_urls_map:
-                        # Replace AI-constructed URLs with actual clicked URLs
-                        discovered_endpoint_urls = list(actual_urls_map.values())
-                        logger.info(f"✅ Extracted {len(discovered_endpoint_urls)} actual operation URLs by clicking:")
+                        # FIX Phase 1: AUGMENT instead of REPLACE - merge clicked URLs with previous discoveries
+                        new_urls = list(actual_urls_map.values())
+                        discovered_endpoint_urls.extend(new_urls)
+                        logger.info(f"Added {len(new_urls)} endpoints from operation clicking")
+                        logger.info(f"✅ Extracted {len(actual_urls_map)} actual operation URLs by clicking:")
                         for op_name, op_url in actual_urls_map.items():
                             # Extract just the operation identifier for logging (generic)
                             # Could be operation=..., could be a path segment, depends on API structure
@@ -436,6 +492,12 @@ class BAAnalyzer:
                     logger.warning(f"Failed to extract actual operation URLs: {e}, falling back to AI-constructed URLs")
             else:
                 logger.info("No operation names found from navigation, using AI-constructed URLs")
+
+        # FIX Phase 1: Deduplicate URLs after all collection methods complete
+        logger.info("=== DEDUPLICATING MERGED URLS ===")
+        original_count = len(discovered_endpoint_urls)
+        discovered_endpoint_urls = list(dict.fromkeys(discovered_endpoint_urls))  # Preserve order
+        logger.info(f"Merged endpoint count: {original_count} → {len(discovered_endpoint_urls)} (removed {original_count - len(discovered_endpoint_urls)} duplicates)")
 
         # FIX #14: Filter out bad URLs (Wikipedia, login pages, spec URLs, etc.)
         logger.info("=== FILTERING DISCOVERED URLS ===")

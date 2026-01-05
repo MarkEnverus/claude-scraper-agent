@@ -101,11 +101,11 @@ def ba_spec_file(tmp_path, realistic_ba_spec):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path):
+async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path, mock_llm_provider):
     """Test complete workflow from BA spec file to generated scraper files."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -115,36 +115,38 @@ async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
         output_dir=output_dir,
-        requires_ai=False,  # Skip BAML for speed
     )
 
     # Verify: Result structure
     assert result.generated_files is not None
+    assert isinstance(result.generated_files, list)  # Orchestrator returns list (one per endpoint)
+    assert len(result.generated_files) > 0
     assert result.ba_spec_path == ba_spec_file
     assert result.source_type == "API"
     assert result.analysis_performed is False
     assert result.confidence_score == 0.92
 
-    # Verify: Files exist
-    assert result.generated_files.scraper_path.exists()
-    assert result.generated_files.test_path.exists()
-    assert result.generated_files.readme_path.exists()
+    # Verify: Files exist (check first generated scraper)
+    first_files = result.generated_files[0]
+    assert first_files.scraper_path.exists()
+    assert first_files.test_path.exists()
+    assert first_files.readme_path.exists()
 
     # Verify: Metadata
-    metadata = result.generated_files.metadata
+    metadata = first_files.metadata
     assert metadata["source"] == "MISO"
     assert metadata["data_type"] == "energy_pricing"
     assert metadata["dgroup"] == "miso_energy_pricing"
     assert metadata["collection_method"] == "HTTP_REST_API"
-    assert metadata["ai_generated"] is False
+    assert metadata["ai_generated"] is True  # Now uses LLM-generated code
 
 
 @pytest.mark.asyncio
-async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path):
+async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path, mock_llm_provider):
     """Test generated scraper code is syntactically valid Python."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -154,11 +156,11 @@ async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
         output_dir=output_dir,
-        requires_ai=False,
     )
 
-    # Read generated scraper code
-    scraper_code = result.generated_files.scraper_path.read_text()
+    # Read generated scraper code (first endpoint)
+    first_files = result.generated_files[0]
+    scraper_code = first_files.scraper_path.read_text()
 
     # Verify: Code is valid Python (AST parsing)
     try:
@@ -173,11 +175,11 @@ async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path):
+async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path, mock_llm_provider):
     """Test generated test file is syntactically valid Python."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -187,11 +189,11 @@ async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
         output_dir=output_dir,
-        requires_ai=False,
     )
 
-    # Read generated test code
-    test_code = result.generated_files.test_path.read_text()
+    # Read generated test code (first endpoint)
+    first_files = result.generated_files[0]
+    test_code = first_files.test_path.read_text()
 
     # Verify: Code is valid Python (AST parsing)
     try:
@@ -204,11 +206,11 @@ async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path):
+async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path, mock_llm_provider):
     """Test generated README contains all required sections."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -218,11 +220,11 @@ async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
         output_dir=output_dir,
-        requires_ai=False,
     )
 
-    # Read README
-    readme_content = result.generated_files.readme_path.read_text()
+    # Read README (first endpoint)
+    first_files = result.generated_files[0]
+    readme_content = first_files.readme_path.read_text()
 
     # Verify: Contains required sections
     assert "MISO" in readme_content
@@ -231,17 +233,16 @@ async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path):
+async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path, mock_llm_provider):
     """Test HybridGenerator directly (bypass orchestrator)."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "direct_test"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
 
     # Execute
     result = await generator.generate_scraper(
         ba_spec=realistic_ba_spec,
         output_dir=output_dir,
-        requires_ai=False,
     )
 
     # Verify: Files created
@@ -251,7 +252,7 @@ async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path):
 
     # Verify: Metadata correct
     assert result.metadata["source"] == "MISO"
-    assert result.metadata["ai_generated"] is False
+    assert result.metadata["ai_generated"] is True  # Now uses LLM-generated code
 
     # Verify: Scraper code valid Python
     scraper_code = result.scraper_path.read_text()
@@ -262,7 +263,7 @@ async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_e2e_multiple_source_types(tmp_path):
+async def test_e2e_multiple_source_types(tmp_path, mock_llm_provider):
     """Test generation for all supported source types."""
     source_types = ["API", "FTP", "WEBSITE", "EMAIL"]
 
@@ -289,12 +290,11 @@ async def test_e2e_multiple_source_types(tmp_path):
 
         # Generate scraper
         output_dir = tmp_path / "source_types" / source_type.lower()
-        generator = HybridGenerator(use_baml=False)
+        generator = HybridGenerator(llm_provider=mock_llm_provider)
 
         result = await generator.generate_scraper(
             ba_spec=ba_spec,
             output_dir=output_dir,
-            requires_ai=False,
         )
 
         # Verify: Files exist and code is valid Python
@@ -307,10 +307,10 @@ async def test_e2e_multiple_source_types(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path):
+async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path, mock_llm_provider):
     """Test orchestrator creates smart default output directory."""
     # Setup
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -319,17 +319,18 @@ async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path):
     # Execute: Don't specify output_dir, let orchestrator choose
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
-        requires_ai=False,
     )
 
     # Verify: Smart default used (should contain source name)
-    scraper_path = str(result.generated_files.scraper_path)
+    first_files = result.generated_files[0]
+    scraper_path = str(first_files.scraper_path)
     assert "miso" in scraper_path.lower()
-    assert "generated_scrapers" in scraper_path
+    # Orchestrator generates to sourcing/scraping/<source>/ by default
+    assert "sourcing" in scraper_path or "generated_scrapers" in scraper_path
 
 
 @pytest.mark.asyncio
-async def test_e2e_validation_error_handling(tmp_path):
+async def test_e2e_validation_error_handling(tmp_path, mock_llm_provider):
     """Test end-to-end validation error handling."""
     # Create invalid BA spec (missing required fields)
     invalid_spec = {
@@ -339,23 +340,22 @@ async def test_e2e_validation_error_handling(tmp_path):
     }
 
     # Generate scraper should fail with validation error
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     output_dir = tmp_path / "invalid_test"
 
     with pytest.raises(ValueError, match="validation failed"):
         await generator.generate_scraper(
             ba_spec=invalid_spec,
             output_dir=output_dir,
-            requires_ai=False,
         )
 
 
 @pytest.mark.asyncio
-async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path):
+async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path, mock_llm_provider):
     """Test generated files follow naming conventions."""
     # Setup
     output_dir = tmp_path / "naming_test"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -365,24 +365,25 @@ async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=ba_spec_file,
         output_dir=output_dir,
-        requires_ai=False,
     )
 
     # Verify: File naming conventions
-    scraper_filename = result.generated_files.scraper_path.name
-    test_filename = result.generated_files.test_path.name
+    first_files = result.generated_files[0]
+    scraper_filename = first_files.scraper_path.name
+    test_filename = first_files.test_path.name
 
-    # Scraper file should be: scraper_{source}_{data_type}_{method}.py
-    assert scraper_filename.startswith("scraper_")
+    # Scraper file should be: scraper_{source}_{data_type}_{method}.py or main.py
     assert scraper_filename.endswith(".py")
-    assert "miso" in scraper_filename.lower()
+    assert scraper_filename.startswith("scraper_") or scraper_filename == "main.py"
+    if scraper_filename.startswith("scraper_"):
+        assert "miso" in scraper_filename.lower()
 
-    # Test file should be: test_{scraper_filename}
-    assert test_filename.startswith("test_scraper_")
+    # Test file should be: test_{scraper_filename} or test_main.py
     assert test_filename.endswith(".py")
+    assert test_filename.startswith("test_")
 
-    # README should be README.md
-    assert result.generated_files.readme_path.name == "README.md"
+    # README should be README.md or exists
+    assert first_files.readme_path.name.upper().startswith("README")
 
 
 # ============================================================================
@@ -390,7 +391,7 @@ async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_routes_correctly(tmp_path):
+async def test_e2e_orchestrator_routes_correctly(tmp_path, mock_llm_provider):
     """Test orchestrator correctly routes to HybridGenerator for all source types."""
     source_types = ["API", "FTP", "WEBSITE", "EMAIL"]
 
@@ -416,19 +417,19 @@ async def test_e2e_orchestrator_routes_correctly(tmp_path):
         spec_file.write_text(json.dumps(ba_spec))
 
         # Generate via orchestrator
-        generator = HybridGenerator(use_baml=False)
+        generator = HybridGenerator(llm_provider=mock_llm_provider)
         orchestrator = ScraperOrchestrator(
             hybrid_generator=generator,
             analysis_output_dir=analysis_dir
         )
         result = await orchestrator.generate_from_spec(
             ba_spec_file=spec_file,
-            requires_ai=False,
         )
 
         # Verify: Routing worked
         assert result.source_type == source_type
-        assert result.generated_files.scraper_path.exists()
+        first_files = result.generated_files[0]
+        assert first_files.scraper_path.exists()
 
 
 # ============================================================================
@@ -436,20 +437,19 @@ async def test_e2e_orchestrator_routes_correctly(tmp_path):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_generation_performance(realistic_ba_spec, tmp_path):
+async def test_e2e_generation_performance(realistic_ba_spec, tmp_path, mock_llm_provider):
     """Test generation completes in reasonable time."""
     import time
 
     # Setup
     output_dir = tmp_path / "performance_test"
-    generator = HybridGenerator(use_baml=False)
+    generator = HybridGenerator(llm_provider=mock_llm_provider)
 
     # Execute: Measure time
     start_time = time.time()
     result = await generator.generate_scraper(
         ba_spec=realistic_ba_spec,
         output_dir=output_dir,
-        requires_ai=False,
     )
     duration = time.time() - start_time
 

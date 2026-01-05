@@ -1,16 +1,18 @@
-"""Hybrid scraper generator combining Jinja2 templates with BAML AI code generation.
+"""Hybrid scraper generator combining Jinja2 templates with LLM AI code generation.
 
 This module orchestrates scraper generation using:
 - VariableTransformer: Transforms BA Analyzer specs to template variables
-- BAML functions: Generates complex code (collect_content, validate_content, auth)
+- LLM Provider: Generates complex code (collect_content, validate_content, auth)
 - TemplateRenderer: Renders Jinja2 templates with AI-generated code
 """
 
 import asyncio
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, Optional
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from pydantic import BaseModel, Field
 
 from claude_scraper.generators.variable_transformer import VariableTransformer
 from claude_scraper.generators.template_renderer import TemplateRenderer
@@ -21,20 +23,21 @@ from claude_scraper.validators import (
     CodeValidator,
     ValidationLevel,
 )
+from claude_scraper.llm.base import LLMProvider
+from claude_scraper.prompts.scraper_generator import (
+    generate_collect_content_prompt,
+    generate_validate_content_prompt,
+    generate_complex_auth_prompt,
+)
 
-# Import BAML generated client (will be available after baml generate)
-try:
-    from baml_client import b
-    from baml_client.types import GeneratedCode
-    BAML_AVAILABLE = True
-except ImportError:
-    BAML_AVAILABLE = False
-    # Fallback for when BAML client not generated yet
-    @dataclass
-    class GeneratedCode:
-        code: str = ""
-        imports: list = field(default_factory=list)
-        notes: str = ""
+logger = logging.getLogger(__name__)
+
+
+class GeneratedCode(BaseModel):
+    """Generated code from LLM."""
+    code: str
+    imports: list[str] = Field(default_factory=list)
+    notes: str = ""
 
 
 @dataclass
@@ -51,34 +54,27 @@ class HybridGenerator:
 
     This generator combines:
     1. Jinja2 templates for structural boilerplate
-    2. BAML AI functions for complex logic generation
+    2. LLM provider for complex logic generation
     3. Variable transformation from BA Analyzer specs
     """
 
     def __init__(
         self,
+        llm_provider: LLMProvider,
         template_dir: Optional[Path] = None,
-        use_baml: bool = True,
         validation_config: Optional[ValidationConfig] = None,
     ):
         """Initialize hybrid generator.
 
         Args:
+            llm_provider: LLM provider for AI code generation
             template_dir: Directory containing Jinja2 templates
-            use_baml: Use BAML for AI code generation (set False for testing)
             validation_config: Validation configuration (None = from environment)
         """
+        self.llm = llm_provider
         self.transformer = VariableTransformer()
         self.renderer = TemplateRenderer(template_dir)
         self.infra_manager = InfrastructureManager()
-
-        # Check if BAML is requested but not available
-        if use_baml and not BAML_AVAILABLE:
-            raise ImportError(
-                "BAML client not available. Run 'baml generate' first or set use_baml=False"
-            )
-
-        self.use_baml = use_baml and BAML_AVAILABLE
 
         # Initialize validation
         self.validation_config = validation_config or ValidationConfig.from_environment()
@@ -164,7 +160,7 @@ class HybridGenerator:
 
         Raises:
             ValueError: If spec validation fails
-            RuntimeError: If code generation fails or BAML not available
+            RuntimeError: If code generation fails
         """
         output_dir = Path(output_dir)
         output_dir.mkdir(parents=True, exist_ok=True)
@@ -192,13 +188,7 @@ class HybridGenerator:
                 f"Variable transformation validation failed:\n" + "\n".join(errors)
             )
 
-        # Step 4: Generate AI code via BAML (mandatory)
-        if not self.use_baml:
-            raise RuntimeError(
-                "AI code generation required but BAML not available. "
-                "Run 'baml generate' to set up BAML client."
-            )
-
+        # Step 4: Generate AI code via LLM provider
         ai_code = await self._generate_ai_code(ba_spec, baml_inputs, template_vars)
 
         # Add AI-generated code to template variables
@@ -227,7 +217,7 @@ class HybridGenerator:
                         f"Generated code has {len(critical_errors)} critical interface violations:\n"
                         f"{error_summary}\n\n"
                         f"The generated code does not conform to BaseCollector interface.\n"
-                        f"This usually means BAML prompts need updating or templates have errors."
+                        f"This usually means LLM prompts need updating or templates have errors."
                     )
                 else:
                     print(f"⚠️  Warning: Generated code has {len(critical_errors)} critical errors:")
@@ -286,7 +276,7 @@ class HybridGenerator:
             "collection_method": template_vars["collection_method"],
             "generated_date": template_vars["generated_date"],
             "infrastructure_version": template_vars["infrastructure_version"],
-            "ai_generated": self.use_baml,
+            "ai_generated": True,
         }
 
         return GeneratedFiles(
@@ -302,11 +292,11 @@ class HybridGenerator:
         baml_inputs: Dict[str, Any],
         template_vars: Dict[str, Any],
     ) -> Dict[str, str]:
-        """Generate AI code using BAML functions.
+        """Generate AI code using LLM provider.
 
         Args:
             ba_spec: Original BA Analyzer spec
-            baml_inputs: Extracted inputs for BAML functions
+            baml_inputs: Extracted inputs for LLM prompts
             template_vars: Template variables (for context)
 
         Returns:
@@ -317,69 +307,93 @@ class HybridGenerator:
         """
         ba_spec_json = json.dumps(ba_spec, indent=2)
 
-        # Generate code in parallel for efficiency
-        tasks = []
+        # Extract endpoint for AI generation
+        if not baml_inputs["endpoints"]:
+            raise ValueError("No endpoints found in BA spec")
 
-        # Task 1: Generate collect_content() code
-        tasks.append(
-            b.GenerateCollectContent(
-                ba_spec_json=ba_spec_json,
-                endpoint=baml_inputs["endpoints"][0].get("endpoint_id", "") if baml_inputs["endpoints"] else "",
-                auth_method=baml_inputs["auth_method"],
-                data_format=template_vars["data_format"],
-                timeout_seconds=template_vars["timeout_seconds"],
-                retry_attempts=template_vars["retry_attempts"],
-            )
+        # Should be single endpoint after orchestrator split
+        endpoint_id = baml_inputs["endpoints"][0].get("endpoint_id", "")
+        endpoint_name = baml_inputs["endpoints"][0].get("name", "unknown")
+
+        logger.info(f"Generating AI code for endpoint: {endpoint_name} ({endpoint_id})")
+
+        # Create prompts
+        collect_prompt = generate_collect_content_prompt(
+            ba_spec_json=ba_spec_json,
+            endpoint=endpoint_id,
+            auth_method=baml_inputs["auth_method"],
+            data_format=template_vars["data_format"],
+            timeout_seconds=template_vars["timeout_seconds"],
+            retry_attempts=template_vars["retry_attempts"]
         )
 
-        # Task 2: Generate validate_content() code
-        tasks.append(
-            b.GenerateValidateContent(
-                ba_spec_json=ba_spec_json,
-                endpoint=baml_inputs["endpoints"][0].get("endpoint_id", "") if baml_inputs["endpoints"] else "",
-                data_format=template_vars["data_format"],
-                validation_requirements=json.dumps({
-                    "data_format": template_vars["data_format"],
-                    "update_frequency": baml_inputs["update_frequency"],
-                    "historical_support": baml_inputs["historical_support"],
-                }),
-            )
+        validate_prompt = generate_validate_content_prompt(
+            ba_spec_json=ba_spec_json,
+            endpoint=endpoint_id,
+            data_format=template_vars["data_format"],
+            validation_requirements=json.dumps({
+                "data_format": template_vars["data_format"],
+                "update_frequency": baml_inputs["update_frequency"],
+                "historical_support": baml_inputs["historical_support"],
+            })
         )
 
-        # Task 3: Generate init code (only if complex auth needed)
+        # Build tasks list for parallel execution
+        # Use asyncio.to_thread() since invoke_structured is synchronous
+        tasks = [
+            asyncio.to_thread(
+                self.llm.invoke_structured,
+                collect_prompt,
+                GeneratedCode,
+                system="You are an expert Python developer generating production-ready scraper code."
+            ),
+            asyncio.to_thread(
+                self.llm.invoke_structured,
+                validate_prompt,
+                GeneratedCode,
+                system="You are an expert Python developer generating production-ready data validation code."
+            )
+        ]
+
+        # Add complex auth if needed
         auth_method = baml_inputs["auth_method"]
         if auth_method in ["OAUTH", "SAML", "MFA", "COOKIE"]:
+            auth_prompt = generate_complex_auth_prompt(
+                auth_spec=json.dumps(baml_inputs),
+                auth_method=auth_method,
+                registration_url=baml_inputs.get("registration_url", "")
+            )
             tasks.append(
-                b.GenerateComplexAuth(
-                    auth_spec=json.dumps(baml_inputs),
-                    auth_method=auth_method,
-                    registration_url=baml_inputs.get("registration_url", ""),
+                asyncio.to_thread(
+                    self.llm.invoke_structured,
+                    auth_prompt,
+                    GeneratedCode,
+                    system="You are an expert Python developer generating authentication setup code."
                 )
             )
         else:
-            # No complex auth needed
-            tasks.append(asyncio.create_task(self._dummy_init_code()))
+            # No complex auth needed - use dummy
+            tasks.append(self._dummy_init_code())
 
-        # Execute all BAML calls in parallel
+        # Execute all LLM calls in parallel
         results = await asyncio.gather(*tasks, return_exceptions=True)
-
-        # Process results
-        collect_code = results[0]
-        validate_code = results[1]
-        init_code = results[2]
 
         # Check for errors
         for i, result in enumerate(results):
             if isinstance(result, Exception):
                 raise RuntimeError(
-                    f"BAML code generation failed (task {i}): {result}"
+                    f"LLM code generation failed (task {i}): {result}"
                 )
 
         # Extract code from GeneratedCode objects
+        collect_code = results[0]
+        validate_code = results[1]
+        init_code = results[2]
+
         return {
-            "collect_content_code": collect_code.code if hasattr(collect_code, "code") else str(collect_code),
-            "validate_content_code": validate_code.code if hasattr(validate_code, "code") else str(validate_code),
-            "init_code": init_code.code if hasattr(init_code, "code") else str(init_code),
+            "collect_content_code": collect_code.code,
+            "validate_content_code": validate_code.code,
+            "init_code": init_code.code,
         }
 
     async def _dummy_init_code(self) -> GeneratedCode:

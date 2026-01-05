@@ -10,8 +10,9 @@ This module provides a simple orchestrator that:
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
-from typing import Dict, Any, Optional, Union
+from typing import Dict, Any, Optional, Union, List
 from dataclasses import dataclass
 
 from claude_scraper.generators.hybrid_generator import HybridGenerator, GeneratedFiles
@@ -20,6 +21,7 @@ from claude_scraper.types.errors import (
     BAAnalysisError,
     GenerationError,
 )
+from claude_scraper.llm.base import LLMProvider
 
 logger = logging.getLogger(__name__)
 
@@ -29,13 +31,13 @@ class OrchestrationResult:
     """Result of orchestrated scraper generation.
 
     Attributes:
-        generated_files: Paths to generated scraper files
+        generated_files: List of paths to generated scraper files (supports multi-scraper generation)
         ba_spec_path: Path to BA spec used (for audit)
         source_type: Detected source type (API, FTP, WEBSITE, EMAIL)
         confidence_score: BA Analyzer confidence score (if URL was analyzed)
         analysis_performed: Whether BA analysis was performed (vs using existing spec)
     """
-    generated_files: GeneratedFiles
+    generated_files: List[GeneratedFiles]
     ba_spec_path: Path
     source_type: str
     confidence_score: Optional[float] = None
@@ -74,16 +76,42 @@ class ScraperOrchestrator:
 
     def __init__(
         self,
+        llm_provider: Optional[LLMProvider] = None,
         hybrid_generator: Optional[HybridGenerator] = None,
         analysis_output_dir: str = "datasource_analysis",
     ):
         """Initialize orchestrator.
 
         Args:
-            hybrid_generator: Generator instance (default: creates new)
+            llm_provider: LLM provider for code generation (default: auto-create from environment)
+            hybrid_generator: Generator instance (default: creates new with provided LLM)
             analysis_output_dir: Where BA Analyzer saves specs (default: datasource_analysis)
         """
-        self.hybrid_generator = hybrid_generator or HybridGenerator()
+        # Auto-create LLM provider if not provided
+        if not llm_provider and not hybrid_generator:
+            from claude_scraper.cli.config import Config
+            from claude_scraper.llm import create_llm_provider
+
+            provider_name = os.getenv("LLM_PROVIDER", "anthropic")
+
+            # Warn if using deprecated Bedrock provider
+            if provider_name == "bedrock":
+                import warnings
+                warnings.warn(
+                    "Bedrock provider is deprecated. Using Anthropic API is recommended.",
+                    DeprecationWarning,
+                    stacklevel=2
+                )
+
+            config = Config.from_env(provider_name)
+            llm_provider = create_llm_provider(provider_name, config)
+
+        # Create or use provided generator
+        if hybrid_generator:
+            self.hybrid_generator = hybrid_generator
+        else:
+            self.hybrid_generator = HybridGenerator(llm_provider=llm_provider)
+
         self.analysis_output_dir = Path(analysis_output_dir)
 
         logger.info(
@@ -116,7 +144,7 @@ class ScraperOrchestrator:
 
         Raises:
             BAAnalysisError: If BA Analyzer fails
-            GenerationError: If scraper generation fails or BAML not available
+            GenerationError: If scraper generation fails
             ValueError: If URL is invalid
         """
         if not url or not url.strip():
@@ -135,6 +163,7 @@ class ScraperOrchestrator:
             from claude_scraper.tools.botasaurus_tool import BotasaurusTool
 
             ba_analyzer = BAAnalyzer(
+                llm_provider=self.hybrid_generator.llm,  # Get LLM from generator
                 botasaurus=BotasaurusTool(),
                 repository=AnalysisRepository(str(self.analysis_output_dir)),
             )
@@ -149,6 +178,36 @@ class ScraperOrchestrator:
                     "endpoints": len(validated_spec.endpoints or []),
                 },
             )
+
+            # Generate executive summary (Phase 4)
+            try:
+                logger.info("Generating executive summary...")
+                from claude_scraper.agents.ba_executive_summary_generator import BAExecutiveSummaryGenerator
+
+                summary_gen = BAExecutiveSummaryGenerator(
+                    llm_provider=self.hybrid_generator.llm,
+                    repository=ba_analyzer.repository
+                )
+                executive_summary = await summary_gen.generate_summary(
+                    validated_spec=validated_spec,
+                    save_result=True
+                )
+
+                summary_path = summary_gen.get_summary_path()
+                logger.info(f"✅ Executive summary generated: {summary_path}")
+
+            except Exception as summary_error:
+                # HARD FAIL - per user requirement
+                logger.error(
+                    f"❌ EXECUTIVE SUMMARY GENERATION FAILED: {summary_error}",
+                    extra={
+                        "error_type": type(summary_error).__name__,
+                        "error_details": str(summary_error),
+                    },
+                    exc_info=True
+                )
+                raise RuntimeError(f"Executive summary generation failed: {summary_error}") from summary_error
+
         except Exception as e:
             logger.error("BA Analyzer failed", extra={"url": url, "error": str(e)}, exc_info=True)
             raise BAAnalysisError(f"BA Analyzer failed for {url}: {e}") from e
@@ -187,7 +246,8 @@ class ScraperOrchestrator:
         logger.info(
             "Orchestration complete",
             extra={
-                "scraper_path": str(result.generated_files.scraper_path),
+                "scrapers_generated": len(result.generated_files),
+                "scraper_paths": [str(gf.scraper_path) for gf in result.generated_files],
                 "source_type": result.source_type,
                 "confidence": result.confidence_score,
             },
@@ -215,7 +275,7 @@ class ScraperOrchestrator:
             OrchestrationResult with generated files and metadata
 
         Raises:
-            GenerationError: If scraper generation fails or BAML not available
+            GenerationError: If scraper generation fails
             FileNotFoundError: If BA spec file doesn't exist
             ValueError: If BA spec is invalid
         """
@@ -255,7 +315,8 @@ class ScraperOrchestrator:
         logger.info(
             "Orchestration complete",
             extra={
-                "scraper_path": str(result.generated_files.scraper_path),
+                "scrapers_generated": len(result.generated_files),
+                "scraper_paths": [str(gf.scraper_path) for gf in result.generated_files],
                 "source_type": result.source_type,
             },
         )
@@ -266,47 +327,96 @@ class ScraperOrchestrator:
         self,
         ba_spec_dict: Dict[str, Any],
         output_dir: Optional[Union[str, Path]],
-    ) -> GeneratedFiles:
-        """Generate scraper using HybridGenerator.
+    ) -> List[GeneratedFiles]:
+        """Generate scraper(s) using HybridGenerator.
 
+        For multi-endpoint specs, generates one scraper per endpoint.
         Routes to appropriate generator based on source_type.
         Currently all source types use HybridGenerator.
 
         Args:
             ba_spec_dict: BA Analyzer validated spec
-            output_dir: Output directory for scraper
+            output_dir: Output directory for scraper(s)
 
         Returns:
-            GeneratedFiles with paths to created files
+            List of GeneratedFiles (one per scraper)
 
         Raises:
-            GenerationError: If generation fails or BAML not available
+            GenerationError: If generation fails
         """
         source_type = ba_spec_dict.get("source_type", "").upper()
+        endpoints = ba_spec_dict.get("endpoints", [])
 
-        # Determine output directory with smart default
+        # Validate source type
+        if source_type not in ["API", "FTP", "WEBSITE", "EMAIL"]:
+            raise GenerationError(
+                f"Unsupported source_type: {source_type}. "
+                f"Expected one of: API, FTP, WEBSITE, EMAIL"
+            )
+
+        if not endpoints:
+            raise GenerationError("BA spec has no endpoints")
+
+        # Determine base output directory
         if output_dir is None:
             output_dir = self._determine_output_dir(ba_spec_dict)
         else:
             output_dir = Path(output_dir)
 
-        logger.info(
-            "Routing to generator for source_type",
-            extra={"source_type": source_type, "output_dir": str(output_dir)},
-        )
+        # Multi-endpoint: generate one scraper per endpoint
+        if len(endpoints) > 1:
+            logger.info(
+                f"Multi-endpoint spec detected: generating {len(endpoints)} scrapers",
+                extra={"source_type": source_type, "endpoint_count": len(endpoints)},
+            )
+            results = []
 
-        # Route based on source type
-        # Currently all use HybridGenerator
-        if source_type in ["API", "FTP", "WEBSITE", "EMAIL"]:
-            return await self.hybrid_generator.generate_scraper(
+            for i, endpoint in enumerate(endpoints, 1):
+                # Use endpoint_id (contains specific operation) instead of name (may be generic)
+                endpoint_name = endpoint.get("endpoint_id", endpoint.get("name", f"endpoint_{i}"))
+                logger.info(f"Generating scraper {i}/{len(endpoints)}: {endpoint_name}")
+
+                # Create single-endpoint BA spec (preserve original dataset)
+                single_endpoint_spec = {
+                    **ba_spec_dict,
+                    "endpoints": [endpoint],
+                    # Keep original dataset, add endpoint_name for path generation
+                    "_endpoint_name": endpoint_name,  # Pass to _determine_output_dir
+                }
+
+                # Determine unique output directory for this endpoint
+                # Always use monorepo structure: {base}/sourcing/scraping/{datasource}/{dataset}/{endpoint_snake}/
+                monorepo_path = self._determine_output_dir(single_endpoint_spec)
+
+                if output_dir is not None:
+                    # User specified output_dir - use it as base, then add monorepo structure
+                    endpoint_output_dir = output_dir / monorepo_path
+                else:
+                    # No output_dir specified - use monorepo structure from current directory
+                    endpoint_output_dir = monorepo_path
+
+                # Generate scraper for this endpoint
+                generated_files = await self.hybrid_generator.generate_scraper(
+                    ba_spec=single_endpoint_spec,
+                    output_dir=endpoint_output_dir,
+                )
+                results.append(generated_files)
+
+                logger.info(f"✓ Generated scraper {i}/{len(endpoints)}: {generated_files.scraper_path}")
+
+            return results
+
+        # Single endpoint: generate one scraper
+        else:
+            logger.info(
+                "Single-endpoint spec detected: generating 1 scraper",
+                extra={"source_type": source_type, "output_dir": str(output_dir)},
+            )
+            generated_files = await self.hybrid_generator.generate_scraper(
                 ba_spec=ba_spec_dict,
                 output_dir=output_dir,
             )
-        else:
-            raise GenerationError(
-                f"Unsupported source_type: {source_type}. "
-                f"Expected one of: API, FTP, WEBSITE, EMAIL"
-            )
+            return [generated_files]
 
     def _load_ba_spec_file(self, spec_path: Path) -> Dict[str, Any]:
         """Load and validate BA spec from JSON file.
@@ -338,7 +448,9 @@ class ScraperOrchestrator:
     def _determine_output_dir(self, ba_spec: Dict[str, Any]) -> Path:
         """Determine smart output directory from BA spec.
 
-        Creates: ./sourcing/scraping/{datasource}/{dataset}/
+        Creates:
+        - Single endpoint: ./sourcing/scraping/{datasource}/{dataset}/
+        - Multi-endpoint: ./sourcing/scraping/{datasource}/{dataset}/{endpoint}/
 
         Args:
             ba_spec: Validated BA spec
@@ -350,11 +462,18 @@ class ScraperOrchestrator:
 
         transformer = VariableTransformer()
         transformed = transformer.transform(ba_spec)
-        source_snake = transformed["template_vars"]["source_snake"]
-        dataset_snake = transformed["template_vars"].get("dataset_snake", "data")
 
-        # Use source_snake as datasource (already in snake_case)
-        datasource = source_snake
-        dataset = dataset_snake
+        # Use datasource_snake from BA spec (preferred) or fall back to source_snake
+        datasource = transformed["template_vars"].get("datasource_snake") or \
+                     ba_spec.get("datasource") or \
+                     transformed["template_vars"]["source_snake"]
+        dataset = transformed["template_vars"].get("dataset_snake", "data")
+
+        # For multi-endpoint specs, append endpoint name to path
+        endpoint_name = ba_spec.get("_endpoint_name")
+        if endpoint_name:
+            # Convert endpoint name to snake_case for path
+            endpoint_snake = transformer._to_snake_case(endpoint_name)
+            return Path(f"./sourcing/scraping/{datasource}/{dataset}/{endpoint_snake}/")
 
         return Path(f"./sourcing/scraping/{datasource}/{dataset}/")

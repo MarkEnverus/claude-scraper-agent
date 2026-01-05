@@ -7,7 +7,7 @@ decision matrix logic, rate limiting, and error handling.
 import pytest
 import time
 from unittest.mock import Mock, patch, MagicMock
-from baml_client.baml_client.types import EndpointSpec, HTTPMethod, ResponseFormat
+from claude_scraper.types import EndpointSpec, HTTPMethod, ResponseFormat
 from claude_scraper.agents.endpoint_qa import EndpointQATester
 
 

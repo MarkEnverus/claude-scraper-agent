@@ -1,15 +1,15 @@
 """LangGraph pipeline definition for BA analysis orchestration.
 
-This module defines the StateGraph pipeline that orchestrates the 5-agent
+This module defines the StateGraph pipeline that orchestrates the 6-agent
 BA analysis workflow with conditional routing and checkpointing.
 
 Pipeline structure:
-    START → run1 → decision → run2 (if confidence < 0.8) → collation → qa → END
-                          ↘ (if confidence ≥ 0.8) → collation → qa → END
+    START → run1 → decision → run2 (if confidence < 0.8) → collation → phase4 → qa → END
+                          ↘ (if confidence ≥ 0.8) → collation → phase4 → qa → END
 
 The pipeline uses LangGraph's StateGraph with:
 - AnalysisState TypedDict for type-safe state management
-- 5 nodes: run1, decision, run2, collation, qa
+- 6 nodes: run1, decision, run2, collation, phase4, qa
 - Conditional routing based on confidence threshold (0.8)
 - MemorySaver checkpointing for resume capability
 
@@ -30,6 +30,7 @@ from langgraph.graph.state import CompiledStateGraph
 from claude_scraper.orchestration.nodes import (
     collation_node,
     decision_node,
+    phase4_node,
     qa_node,
     run1_node,
     run2_node,
@@ -85,19 +86,21 @@ def should_run_second_pass(state: AnalysisState) -> Literal["run2", "collation"]
 def create_pipeline(with_checkpointing: bool = True) -> CompiledStateGraph:
     """Create and compile the BA analysis pipeline.
 
-    Creates a LangGraph StateGraph with 5 nodes and conditional routing:
+    Creates a LangGraph StateGraph with 6 nodes and conditional routing:
     1. run1_node: Execute Run 1 (4-phase analysis + validation)
     2. decision_node: No-op node for routing decision
     3. run2_node: Execute Run 2 (conditional - only if confidence < 0.8)
     4. collation_node: Merge Run 1 + Run 2 into final spec
-    5. qa_node: Test endpoints with HTTP requests
+    5. phase4_node: Generate executive summary markdown
+    6. qa_node: Test endpoints with HTTP requests
 
     Pipeline edges:
     - START → run1 (unconditional)
     - run1 → decision (unconditional)
     - decision → run2 OR collation (conditional based on confidence)
     - run2 → collation (unconditional)
-    - collation → qa (unconditional)
+    - collation → phase4 (unconditional)
+    - phase4 → qa (unconditional)
     - qa → END (unconditional)
 
     Args:
@@ -130,6 +133,7 @@ def create_pipeline(with_checkpointing: bool = True) -> CompiledStateGraph:
     graph.add_node("decision", decision_node)
     graph.add_node("run2", run2_node)
     graph.add_node("collation", collation_node)
+    graph.add_node("phase4", phase4_node)
     graph.add_node("qa", qa_node)
 
     # Add edges
@@ -154,8 +158,11 @@ def create_pipeline(with_checkpointing: bool = True) -> CompiledStateGraph:
     # run2 → collation (if Run 2 was executed)
     graph.add_edge("run2", "collation")
 
-    # collation → qa (always run QA after collation)
-    graph.add_edge("collation", "qa")
+    # collation → phase4 (always generate executive summary)
+    graph.add_edge("collation", "phase4")
+
+    # phase4 → qa (always run QA after summary)
+    graph.add_edge("phase4", "qa")
 
     # qa → END (pipeline complete)
     graph.add_edge("qa", END)

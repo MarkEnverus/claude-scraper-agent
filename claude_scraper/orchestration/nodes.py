@@ -1,11 +1,12 @@
 """LangGraph node implementations for BA analysis pipeline.
 
-This module implements the 5 nodes that make up the BA analysis pipeline:
+This module implements the 6 nodes that make up the BA analysis pipeline:
 1. run1_node: Execute Run 1 (4-phase BA analysis + validation)
 2. decision_node: Determine if Run 2 is needed (confidence check)
 3. run2_node: Execute Run 2 (focused re-analysis based on validation gaps)
 4. collation_node: Merge Run 1 + Run 2 into final specification
-5. qa_node: Run Endpoint QA testing on final spec
+5. phase4_node: Generate executive summary markdown
+6. qa_node: Run Endpoint QA testing on final spec
 
 Each node is an async function that takes AnalysisState and returns
 a dict of state updates. Nodes are designed to be composed into a
@@ -21,24 +22,28 @@ Example:
 """
 
 import logging
+import os
 import time
 from functools import wraps
 from typing import Any
 
-from baml_client.baml_client.types import (
+from claude_scraper.agents.ba_analyzer import BAAnalyzer
+from claude_scraper.agents.ba_collator import BACollator
+from claude_scraper.agents.ba_executive_summary_generator import BAExecutiveSummaryGenerator
+from claude_scraper.agents.ba_validator import BAValidator
+from claude_scraper.agents.endpoint_qa import EndpointQATester
+from claude_scraper.cli.config import Config
+from claude_scraper.llm import create_llm_provider
+from claude_scraper.orchestration.state import AnalysisState
+from claude_scraper.storage.repository import AnalysisRepository
+from claude_scraper.tools.botasaurus_tool import BotasaurusTool
+from claude_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
     ValidatedSpec,
     ValidationReport,
 )
-from claude_scraper.agents.ba_analyzer import BAAnalyzer
-from claude_scraper.agents.ba_collator import BACollator
-from claude_scraper.agents.ba_validator import BAValidator
-from claude_scraper.agents.endpoint_qa import EndpointQATester
-from claude_scraper.orchestration.state import AnalysisState
-from claude_scraper.storage.repository import AnalysisRepository
-from claude_scraper.tools.botasaurus_tool import BotasaurusTool
 from claude_scraper.types.errors import (
     CollationError,
     QATestingError,
@@ -176,7 +181,7 @@ def _convert_endpoint_details_to_spec(endpoint: Any) -> Any:
         >>> endpoint_details = validated_spec.endpoints[0]
         >>> endpoint_spec = _convert_endpoint_details_to_spec(endpoint_details)
     """
-    from baml_client.baml_client.types import EndpointSpec
+    from claude_scraper.types import EndpointSpec
 
     # Determine if authentication is mentioned based on authentication dict
     auth_mentioned = bool(endpoint.authentication)
@@ -232,30 +237,65 @@ async def run1_node(state: AnalysisState) -> dict[str, Any]:
     logger.info(f"Starting Run 1 analysis for {url}")
 
     try:
+        # Initialize LLM provider
+        provider_name = state.get("provider") or os.getenv("LLM_PROVIDER", "anthropic")
+        config = Config.from_env(provider_name)
+        llm_provider = create_llm_provider(provider_name, config)
+
         # Initialize tools and agents
         botasaurus = BotasaurusTool()
         repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
 
         analyzer = BAAnalyzer(
+            llm_provider=llm_provider,
             botasaurus=botasaurus,
             repository=repository,
         )
-        validator = BAValidator(repository=repository)
+        validator = BAValidator(llm_provider=llm_provider, repository=repository)
 
         # Phase 0: Detection
         logger.info("Run 1: Starting Phase 0 - Data source detection")
         phase0 = await analyzer.analyze_phase0(url)
         logger.info(
             f"Run 1 Phase 0 complete: {phase0.detected_type} "
-            f"(confidence: {phase0.confidence:.2f})"
+            f"(confidence: {phase0.confidence:.2f}), "
+            f"{len(phase0.discovered_endpoint_urls)} endpoint URLs discovered"
         )
+
+        # NEW: Analyze endpoints individually (to avoid token exhaustion)
+        endpoint_analyses = []
+        if hasattr(phase0, 'discovered_endpoint_urls') and phase0.discovered_endpoint_urls:
+            logger.info(
+                f"Run 1: Analyzing {len(phase0.discovered_endpoint_urls)} endpoints individually"
+            )
+
+            # Get page context for endpoint analysis
+            from claude_scraper.tools.html_preprocessor import HTMLPreprocessor, format_for_prompt
+            raw_html = botasaurus.get_page_content(url)
+            preprocessor = HTMLPreprocessor(base_url=url)
+            structured_data = preprocessor.extract_structured_data(raw_html)
+            page_context = format_for_prompt(structured_data)
+
+            # Analyze each endpoint individually
+            endpoint_analyses = await analyzer.analyze_endpoints(
+                endpoint_urls=phase0.discovered_endpoint_urls,
+                page_context=page_context,
+                auth_method=phase0.auth_method if hasattr(phase0, 'auth_method') else "NONE",
+                base_url=phase0.base_url if hasattr(phase0, 'base_url') else url,
+            )
+
+            logger.info(
+                f"Run 1: Individual endpoint analysis complete - "
+                f"{len(endpoint_analyses)} endpoints analyzed"
+            )
+        else:
+            endpoint_analyses = None
 
         # Phase 1: Documentation
         logger.info("Run 1: Starting Phase 1 - Documentation extraction")
-        phase1 = await analyzer.analyze_phase1(url, phase0)
+        phase1 = await analyzer.analyze_phase1(url, phase0, endpoint_analyses)
         logger.info(
-            f"Run 1 Phase 1 complete: {len(phase1.endpoints)} endpoints, "
-            f"quality: {phase1.doc_quality}"
+            f"Run 1 Phase 1 complete: {len(phase1.endpoints)} endpoints documented"
         )
 
         # Phase 2: Testing
@@ -352,8 +392,11 @@ async def decision_node(state: AnalysisState) -> dict[str, Any]:
         validation = state.get("validation_run1")
         if validation:
             # Use temporary validator instance to extract focus areas
+            provider_name = state.get("provider") or os.getenv("LLM_PROVIDER", "anthropic")
+            config = Config.from_env(provider_name)
+            llm_provider = create_llm_provider(provider_name, config)
             repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
-            validator_temp = BAValidator(repository=repository)
+            validator_temp = BAValidator(llm_provider=llm_provider, repository=repository)
             focus_areas = validator_temp.get_run2_focus_areas(validation)
             logger.info(
                 f"Run 2 will execute with {len(focus_areas)} focus areas",
@@ -409,9 +452,14 @@ async def run2_node(state: AnalysisState) -> dict[str, Any]:
 
     logger.info(f"Starting Run 2 analysis for {url}")
 
+    # Initialize LLM provider
+    provider_name = state.get("provider") or os.getenv("LLM_PROVIDER", "anthropic")
+    config = Config.from_env(provider_name)
+    llm_provider = create_llm_provider(provider_name, config)
+
     # Extract focus areas from Run 1 validation
     repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
-    validator = BAValidator(repository=repository)
+    validator = BAValidator(llm_provider=llm_provider, repository=repository)
     focus_areas = validator.get_run2_focus_areas(validation_run1)
     logger.info(
         f"Run 2 will focus on {len(focus_areas)} areas",
@@ -424,6 +472,7 @@ async def run2_node(state: AnalysisState) -> dict[str, Any]:
         repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
 
         analyzer = BAAnalyzer(
+            llm_provider=llm_provider,
             botasaurus=botasaurus,
             repository=repository,
         )
@@ -433,15 +482,44 @@ async def run2_node(state: AnalysisState) -> dict[str, Any]:
         phase0 = await analyzer.analyze_phase0(url)
         logger.info(
             f"Run 2 Phase 0 complete: {phase0.detected_type} "
-            f"(confidence: {phase0.confidence:.2f})"
+            f"(confidence: {phase0.confidence:.2f}), "
+            f"{len(phase0.discovered_endpoint_urls)} endpoint URLs discovered"
         )
+
+        # NEW: Analyze endpoints individually (to avoid token exhaustion)
+        endpoint_analyses = []
+        if hasattr(phase0, 'discovered_endpoint_urls') and phase0.discovered_endpoint_urls:
+            logger.info(
+                f"Run 2: Analyzing {len(phase0.discovered_endpoint_urls)} endpoints individually"
+            )
+
+            # Get page context for endpoint analysis
+            from claude_scraper.tools.html_preprocessor import HTMLPreprocessor, format_for_prompt
+            raw_html = botasaurus.get_page_content(url)
+            preprocessor = HTMLPreprocessor(base_url=url)
+            structured_data = preprocessor.extract_structured_data(raw_html)
+            page_context = format_for_prompt(structured_data)
+
+            # Analyze each endpoint individually
+            endpoint_analyses = await analyzer.analyze_endpoints(
+                endpoint_urls=phase0.discovered_endpoint_urls,
+                page_context=page_context,
+                auth_method=phase0.auth_method if hasattr(phase0, 'auth_method') else "NONE",
+                base_url=phase0.base_url if hasattr(phase0, 'base_url') else url,
+            )
+
+            logger.info(
+                f"Run 2: Individual endpoint analysis complete - "
+                f"{len(endpoint_analyses)} endpoints analyzed"
+            )
+        else:
+            endpoint_analyses = None
 
         # Phase 1: Documentation
         logger.info("Run 2: Starting Phase 1 - Documentation extraction")
-        phase1 = await analyzer.analyze_phase1(url, phase0)
+        phase1 = await analyzer.analyze_phase1(url, phase0, endpoint_analyses)
         logger.info(
-            f"Run 2 Phase 1 complete: {len(phase1.endpoints)} endpoints, "
-            f"quality: {phase1.doc_quality}"
+            f"Run 2 Phase 1 complete: {len(phase1.endpoints)} endpoints documented"
         )
 
         # Phase 2: Testing
@@ -530,8 +608,13 @@ async def collation_node(state: AnalysisState) -> dict[str, Any]:
     logger.info("Starting collation")
 
     try:
+        # Initialize LLM provider
+        provider_name = state.get("provider") or os.getenv("LLM_PROVIDER", "anthropic")
+        config = Config.from_env(provider_name)
+        llm_provider = create_llm_provider(provider_name, config)
+
         repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
-        collator = BACollator(repository=repository)
+        collator = BACollator(llm_provider=llm_provider, repository=repository)
 
         if run2_required and phase3_run2:
             # Merge Run 1 + Run 2
@@ -551,7 +634,7 @@ async def collation_node(state: AnalysisState) -> dict[str, Any]:
                 "Collation complete (Run 1 + Run 2)",
                 extra={
                     "final_endpoints": len(final_spec.endpoints),
-                    "final_confidence": final_spec.validation_summary.final_confidence_score,
+                    "final_confidence": final_spec.validation_summary.confidence_score,
                 },
             )
         else:
@@ -572,6 +655,87 @@ async def collation_node(state: AnalysisState) -> dict[str, Any]:
             exc_info=True,
         )
         raise CollationError(f"Collation failed: {e}") from e
+
+
+@profile_node("Phase 4 Executive Summary")
+async def phase4_node(state: AnalysisState) -> dict[str, Any]:
+    """Generate executive summary markdown from final specification.
+
+    Creates a human-readable markdown executive summary from the collated
+    final specification. This provides a JIRA-ready document for business
+    stakeholders summarizing the data source analysis.
+
+    Args:
+        state: Current pipeline state (must contain "final_spec")
+
+    Returns:
+        State updates:
+        - executive_summary_markdown: The generated markdown string
+        - executive_summary_path: Path to saved markdown file
+
+    Raises:
+        ValueError: If final_spec is missing
+
+    Example:
+        >>> state = {"final_spec": validated_spec}
+        >>> updates = await phase4_node(state)
+        >>> print(f"Summary saved to: {updates['executive_summary_path']}")
+    """
+    final_spec = state.get("final_spec")
+    if not final_spec:
+        raise ValueError("final_spec is required in state for phase4_node")
+
+    logger.info(
+        f"Starting Phase 4: Executive summary generation for {final_spec.source}"
+    )
+
+    try:
+        # Initialize LLM provider
+        provider_name = state.get("provider") or os.getenv("LLM_PROVIDER", "anthropic")
+        config = Config.from_env(provider_name)
+        llm_provider = create_llm_provider(provider_name, config)
+
+        repository = AnalysisRepository(state.get("output_dir", "datasource_analysis"))
+        generator = BAExecutiveSummaryGenerator(llm_provider=llm_provider, repository=repository)
+
+        # Generate markdown summary
+        markdown = await generator.generate_summary(
+            validated_spec=final_spec,
+            save_result=True
+        )
+
+        summary_path = str(generator.get_summary_path().absolute())
+
+        logger.info(
+            "Phase 4 complete: Executive summary generated",
+            extra={
+                "markdown_length": len(markdown),
+                "output_path": summary_path,
+                "line_count": markdown.count('\n')
+            }
+        )
+
+        return {
+            "executive_summary_markdown": markdown,
+            "executive_summary_path": summary_path
+        }
+
+    except Exception as e:
+        logger.error(
+            "Phase 4 executive summary generation failed",
+            extra={"error": str(e)},
+            exc_info=True
+        )
+        # NOTE: Phase 4 failures are non-critical - we have final_spec already
+        # Log error but don't raise - allow pipeline to continue to QA
+        logger.warning(
+            "Phase 4 failed but pipeline will continue - executive summary not critical for QA",
+            extra={"error": str(e)}
+        )
+        return {
+            "executive_summary_markdown": None,
+            "executive_summary_path": None
+        }
 
 
 @profile_node("QA Testing")
@@ -626,13 +790,13 @@ async def qa_node(state: AnalysisState) -> dict[str, Any]:
         qa_results = tester.test_all_endpoints(endpoint_specs)
 
         logger.info(
-            f"QA testing complete: {qa_results['keep']} kept, "
-            f"{qa_results['remove']} removed, {qa_results['flag']} flagged",
+            f"QA testing complete: {qa_results.keep} kept, "
+            f"{qa_results.remove} removed, {qa_results.flag} flagged",
             extra={
-                "total_tested": qa_results["total_tested"],
-                "keep": qa_results["keep"],
-                "remove": qa_results["remove"],
-                "flag": qa_results["flag"],
+                "total_tested": qa_results.total_tested,
+                "keep": qa_results.keep,
+                "remove": qa_results.remove,
+                "flag": qa_results.flag,
             },
         )
 

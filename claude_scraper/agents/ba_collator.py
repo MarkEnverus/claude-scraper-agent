@@ -14,20 +14,23 @@ Example:
     >>>
     >>> collator = BACollator()
     >>> result = await collator.merge_complete_specs(run1_spec, run2_spec)
-    >>> print(f"Final confidence: {result.validation_summary.final_confidence_score}")
+    >>> print(f"Final confidence: {result.validation_summary.confidence_score}")
 """
 
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
 
-from baml_client import b
-from baml_client.types import (
+from claude_scraper.llm.base import LLMProvider
+from claude_scraper.types import (
     CollationResult,
     Phase0Detection,
     ValidatedSpec,
 )
-
+from claude_scraper.prompts.ba_collator import (
+    merge_phase0_prompt,
+    merge_complete_specs_prompt,
+)
 from claude_scraper.storage.repository import AnalysisRepository
 
 logger = logging.getLogger(__name__)
@@ -57,19 +60,23 @@ class BACollator:
 
     def __init__(
         self,
+        llm_provider: LLMProvider,
         repository: AnalysisRepository | None = None,
         base_dir: str | Path = "datasource_analysis"
     ) -> None:
         """Initialize BA Collator.
 
         Args:
+            llm_provider: LLM provider for structured LLM calls (Bedrock or Anthropic)
             repository: Optional repository for file operations. If None, creates new one.
             base_dir: Base directory for analysis files (default: "datasource_analysis")
 
         Example:
-            >>> collator = BACollator()
-            >>> collator = BACollator(base_dir="custom_analysis_dir")
+            >>> llm_provider = create_llm_provider("bedrock", config)
+            >>> collator = BACollator(llm_provider)
+            >>> collator = BACollator(llm_provider, base_dir="custom_analysis_dir")
         """
+        self.llm = llm_provider
         self.repository = repository or AnalysisRepository(base_dir)
         logger.info(
             "Initialized BACollator",
@@ -126,12 +133,20 @@ class BACollator:
             extra={"expected_confidence": expected_confidence}
         )
 
-        # Call BAML function to merge
+        # Call LLM to merge
         try:
-            result = await b.MergePhase0(
+            # Create prompt for Phase 0 merging
+            prompt = merge_phase0_prompt(
                 run1=run1,
                 run2=run2,
                 run2_focus_areas=run2_focus_areas
+            )
+
+            # Call LLM with structured output
+            result = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=Phase0Detection,
+                system="You are an expert collation analyst specializing in merging multiple analysis runs with weighted scoring."
             )
 
             logger.info(
@@ -142,7 +157,7 @@ class BACollator:
                     "confidence": result.confidence,
                     "indicators_count": len(result.indicators),
                     "api_calls_count": len(result.discovered_api_calls),
-                    "endpoints_count": len(result.endpoints)
+                    "endpoints_count": len(result.discovered_endpoint_urls)
                 }
             )
 
@@ -183,7 +198,7 @@ class BACollator:
         Example:
             >>> merged = await collator.merge_complete_specs(run1, run2)
             >>> print(f"Total endpoints: {merged.executive_summary.total_endpoints_discovered}")
-            >>> print(f"Final confidence: {merged.validation_summary.final_confidence_score}")
+            >>> print(f"Final confidence: {merged.validation_summary.confidence_score}")
         """
         logger.info(
             "Merging complete specifications",
@@ -207,17 +222,23 @@ class BACollator:
             extra={"final_confidence": final_confidence}
         )
 
-        # Call BAML function to merge
+        # Call LLM to merge
         try:
-            result = await b.MergeCompleteSpecs(run1=run1, run2=run2)
+            # Create prompt for complete spec merging
+            prompt = merge_complete_specs_prompt(run1=run1, run2=run2)
+
+            # Call LLM with structured output
+            result = self.llm.invoke_structured(
+                prompt=prompt,
+                response_model=ValidatedSpec,
+                system="You are an expert collation analyst specializing in merging comprehensive data source specifications with weighted confidence scoring and conflict resolution."
+            )
 
             logger.info(
                 "Collation complete",
                 extra={
                     "total_endpoints": result.executive_summary.total_endpoints_discovered,
-                    "final_confidence": result.validation_summary.final_confidence_score,
-                    "collation_complete": result.validation_summary.collation_complete,
-                    "runs_analyzed": result.validation_summary.runs_analyzed
+                    "final_confidence": result.validation_summary.confidence_score
                 }
             )
 
@@ -398,7 +419,7 @@ class BACollator:
         result = CollationResult(
             collation_complete=True,
             final_spec_path="datasource_analysis/final_validated_spec.json",
-            final_confidence_score=final_spec.validation_summary.final_confidence_score or 0.0,
+            final_confidence_score=final_spec.validation_summary.confidence_score or 0.0,
             total_endpoints=final_spec.executive_summary.total_endpoints_discovered,
             endpoints_run1=len(run1_spec.endpoints),
             endpoints_run2=len(run2_spec.endpoints),

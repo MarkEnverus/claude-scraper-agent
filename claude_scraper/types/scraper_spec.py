@@ -7,10 +7,10 @@ scraper generation.
 Example:
     >>> from claude_scraper.types.scraper_spec import APIConfig, ScraperSpec
     >>> config = APIConfig(
-    ...     data_source="NYISO",
-    ...     data_type="load_forecast",
+    ...     data_source="example_source",
+    ...     data_type="data_forecast",
     ...     update_frequency="hourly",
-    ...     api_base_url="https://api.nyiso.com",
+    ...     api_base_url="https://api.example.com",
     ...     endpoints=[{"path": "/forecast", "method": "GET"}]
     ... )
     >>> spec = ScraperSpec(method="http_api", config=config)
@@ -336,10 +336,10 @@ class ScraperSpec(BaseModel):
 
     Example:
         >>> api_config = APIConfig(
-        ...     data_source="NYISO",
-        ...     data_type="load",
+        ...     data_source="example_source",
+        ...     data_type="data",
         ...     update_frequency="hourly",
-        ...     api_base_url="https://api.nyiso.com"
+        ...     api_base_url="https://api.example.com"
         ... )
         >>> spec = ScraperSpec(
         ...     method="http_api",

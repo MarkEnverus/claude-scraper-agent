@@ -12,9 +12,9 @@ Example:
     ...     url: str
     >>>
     >>> repo = AnalysisRepository("datasource_analysis")
-    >>> spec = DataSourceSpec(name="NYISO", url="https://example.com")
-    >>> repo.save("nyiso_spec.json", spec)
-    >>> loaded = repo.load("nyiso_spec.json", DataSourceSpec)
+    >>> spec = DataSourceSpec(name="example_source", url="https://example.com")
+    >>> repo.save("example_spec.json", spec)
+    >>> loaded = repo.load("example_spec.json", DataSourceSpec)
 """
 
 import json
@@ -106,10 +106,10 @@ class AnalysisRepository:
             OSError: If file write fails
 
         Example:
-            >>> spec = DataSourceSpec(name="NYISO", url="https://example.com")
-            >>> repo.save("nyiso_spec.json", spec)
-            >>> repo.save("specs/nyiso.json", spec)  # Creates subdirectory
-            >>> repo.save("nyiso_spec.json", spec, overwrite=False)  # Raises if exists
+            >>> spec = DataSourceSpec(name="example_source", url="https://example.com")
+            >>> repo.save("example_spec.json", spec)
+            >>> repo.save("specs/example.json", spec)  # Creates subdirectory
+            >>> repo.save("example_spec.json", spec, overwrite=False)  # Raises if exists
         """
         # Validate filename
         if not filename or not filename.strip():
@@ -195,9 +195,9 @@ class AnalysisRepository:
             ValidationError: If JSON doesn't match model schema
 
         Example:
-            >>> loaded = repo.load("nyiso_spec.json", DataSourceSpec)
+            >>> loaded = repo.load("example_spec.json", DataSourceSpec)
             >>> print(loaded.name)
-            NYISO
+            example_source
         """
         # Validate filename
         if not filename or not filename.strip():
@@ -272,7 +272,7 @@ class AnalysisRepository:
             ValueError: If filename is invalid
 
         Example:
-            >>> if repo.exists("nyiso_spec.json"):
+            >>> if repo.exists("example_spec.json"):
             ...     print("File exists")
         """
         # Validate filename
@@ -299,7 +299,7 @@ class AnalysisRepository:
             OSError: If deletion fails
 
         Example:
-            >>> if repo.delete("nyiso_spec.json"):
+            >>> if repo.delete("example_spec.json"):
             ...     print("File deleted")
         """
         # Validate filename
@@ -341,7 +341,7 @@ class AnalysisRepository:
         Example:
             >>> files = repo.list_files("*.json")
             >>> print(files)
-            ['nyiso_spec.json', 'aeso_spec.json']
+            ['example_spec.json', 'other_spec.json']
         """
         try:
             files = [

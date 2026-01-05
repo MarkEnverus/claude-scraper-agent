@@ -342,11 +342,12 @@ class BotasaurusTool:
 
         return False
 
-    def _is_valid_data_url(self, url: str) -> bool:
+    def _is_valid_data_url(self, url: str, base_url: str | None = None) -> bool:
         """Check if URL looks like a data endpoint/file (not navigation chrome).
 
         Args:
             url: URL to validate
+            base_url: Base URL of the site (for domain checking)
 
         Returns:
             True if URL appears to be data-related, False otherwise
@@ -367,6 +368,17 @@ class BotasaurusTool:
             if pattern in url_lower:
                 return False
 
+        # FIX Phase 2: Check domain for external URLs (block Wikipedia, MDN, etc.)
+        if url.startswith('http') and base_url:
+            from urllib.parse import urlparse
+            base_domain = urlparse(base_url).netloc
+            url_domain = urlparse(url).netloc
+
+            # Reject external domains
+            if url_domain != base_domain:
+                logger.debug(f"Rejecting external domain: {url_domain} != {base_domain}")
+                return False
+
         # Include data-related patterns
         data_patterns = [
             '/api/', '/v1/', '/v2/', '/v3/', '/data/', '/reports/', '/download/',
@@ -378,12 +390,62 @@ class BotasaurusTool:
             if pattern in url_lower:
                 return True
 
-        # If full URL with http/https and not excluded, consider valid
-        # (Covers custom API paths that don't match common patterns)
+        # If full URL with http/https, require API indicators
+        # (Prevents accepting generic external URLs)
         if url.startswith('http'):
-            return True
+            return any(indicator in url_lower for indicator in
+                      ['/api/', '/v1/', '/v2/', '/v3/', '/rest/', '/data/'])
 
         return False
+
+    def _score_url_quality(self, url: str, operation_name: str) -> float:
+        """Score URL quality for being an actual API endpoint (0-1).
+
+        FIX Phase 4: URL quality scoring to filter out low-quality URLs
+
+        Higher scores = more likely to be a real API endpoint.
+        Used to filter out garbage URLs (Wikipedia, documentation, etc.)
+
+        Args:
+            url: URL to score
+            operation_name: Operation name associated with the URL
+
+        Returns:
+            Quality score from 0.0 (definitely not an endpoint) to 1.0 (definitely an endpoint)
+        """
+        score = 0.5  # Base score
+        url_lower = url.lower()
+        op_name_lower = operation_name.lower()
+
+        # Strong positive indicators
+        if '/api/' in url_lower:
+            score += 0.3
+        if any(v in url_lower for v in ['/v1/', '/v2/', '/v3/']):
+            score += 0.2
+        if '/rest/' in url_lower:
+            score += 0.2
+        if 'operation=' in url_lower:
+            score += 0.3
+        if any(url_lower.endswith(ext) for ext in ['.json', '.xml']):
+            score += 0.2
+
+        # Positive indicators
+        if '/data/' in url_lower:
+            score += 0.1
+        if len(operation_name.split()) >= 3:  # Multi-word = descriptive
+            score += 0.1
+
+        # Negative indicators (red flags)
+        if 'wikipedia.org' in url_lower:
+            score -= 1.0
+        if '/docs/' in url_lower or '/documentation/' in url_lower:
+            score -= 0.3
+        if any(term in op_name_lower for term in ['wadl', 'json', 'xml', 'rest', 'swagger', 'openapi']):
+            score -= 0.5
+        if any(pattern in url_lower for pattern in ['/about', '/help', '/guide', '/tutorial']):
+            score -= 0.4
+
+        return max(0.0, min(1.0, score))
 
     def _extract_endpoint_from_dom(self, driver: Driver, op_name: str) -> str | None:
         """Extract endpoint path from Swagger/OpenAPI operation details DOM.
@@ -855,11 +917,19 @@ class BotasaurusTool:
                                 # Strategy 1: Extract href BEFORE clicking
                                 href = link.get_attribute('href')
 
-                                if href and self._is_valid_data_url(href):
-                                    logger.debug(f"  ✅ Extracted href: {href}")
-                                    operation_urls[op_name] = href
-                                    found = True
-                                    break
+                                # FIX Phase 2: Pass base_url for domain validation
+                                # FIX Phase 4: Add quality scoring to filter garbage URLs
+                                if href and self._is_valid_data_url(href, url):
+                                    quality = self._score_url_quality(href, op_name)
+                                    logger.debug(f"  URL quality score: {quality:.2f} for {href}")
+
+                                    if quality >= 0.5:  # Quality threshold
+                                        logger.debug(f"  ✅ Extracted href (quality={quality:.2f}): {href}")
+                                        operation_urls[op_name] = href
+                                        found = True
+                                        break
+                                    else:
+                                        logger.debug(f"  ❌ Rejected low-quality URL (quality={quality:.2f}): {href}")
 
                                 # Strategy 2: Try clicking to see if URL changes
                                 original_url = driver.current_url
@@ -1159,16 +1229,24 @@ class BotasaurusTool:
             logger.error(f"Error detecting SPA hash routing: {e}")
             return None
 
-    def try_fetch_api_spec(self, url: str) -> Optional[dict]:
-        """Attempt to fetch and parse API specification.
+    def try_fetch_api_spec(
+        self,
+        url: str,
+        auth_username: str | None = None,
+        auth_password: str | None = None
+    ) -> Optional[dict]:
+        """Attempt to fetch and parse API specification with optional authentication.
 
         FIX #11: Phase 3 - Direct Swagger/OpenAPI/WADL spec parsing
+        FIX Phase 3a: Add HTTP Basic Auth support for protected specs
 
         Tries multiple spec formats and locations to achieve 100% endpoint discovery.
         This is the most reliable method for API documentation sites.
 
         Args:
             url: Base URL of API documentation
+            auth_username: Optional HTTP Basic Auth username
+            auth_password: Optional HTTP Basic Auth password
 
         Returns:
             Dict with:
@@ -1181,6 +1259,13 @@ class BotasaurusTool:
             >>> spec_data = tool.try_fetch_api_spec("https://api.example.com/docs")
             >>> if spec_data:
             >>>     print(f"Found {len(spec_data['endpoints'])} endpoints")
+
+            >>> # With authentication
+            >>> spec_data = tool.try_fetch_api_spec(
+            ...     "https://api.example.com/docs",
+            ...     auth_username="user",
+            ...     auth_password="pass"
+            ... )
         """
         logger.info("=== PHASE 3: ATTEMPTING API SPEC PARSING ===")
         logger.info(f"Trying to fetch API specification from: {url}")
@@ -1204,15 +1289,28 @@ class BotasaurusTool:
                 try:
                     logger.debug(f"Trying: {spec_url}")
 
-                    # Fetch with requests (faster than browser)
+                    # FIX Phase 3a: Use HTTP Basic Auth if provided
                     import requests
-                    response = requests.get(spec_url, timeout=10, allow_redirects=True)
+                    from requests.auth import HTTPBasicAuth
+
+                    auth = None
+                    if auth_username and auth_password:
+                        auth = HTTPBasicAuth(auth_username, auth_password)
+                        logger.debug(f"  Using HTTP Basic Auth for: {auth_username}")
+
+                    response = requests.get(spec_url, auth=auth, timeout=10, allow_redirects=True)
 
                     if response.status_code != 200:
                         logger.debug(f"  ❌ HTTP {response.status_code}")
                         # Categorize HTTP errors
                         if response.status_code in [401, 403]:
                             failure_categories['auth'].append((spec_url, response.status_code))
+                            if response.status_code == 401 and not auth:
+                                logger.info(f"📋 Spec requires authentication: {spec_url}")
+                                logger.info(f"   HTTP 401 Unauthorized - Set API_SPEC_AUTH_USER and API_SPEC_AUTH_PASS")
+                            elif response.status_code == 403:
+                                logger.info(f"📋 Access forbidden: {spec_url}")
+                                logger.info(f"   HTTP 403 Forbidden - May require different credentials or permissions")
                         else:
                             failure_categories['http'].append((spec_url, response.status_code))
                         continue
@@ -1295,9 +1393,15 @@ class BotasaurusTool:
             logger.warning(f"Failure summary:")
 
             if failure_categories['auth']:
-                logger.warning(f"  - {len(failure_categories['auth'])} auth-protected (401/403) - specs may require API keys")
+                logger.warning(f"  - {len(failure_categories['auth'])} auth-protected (401/403) - specs require authentication")
                 for url, code in failure_categories['auth'][:3]:  # Show first 3
                     logger.warning(f"    • {url} (HTTP {code})")
+                if not auth_username:
+                    logger.info(f"💡 To enable authenticated spec parsing:")
+                    logger.info(f"   export API_SPEC_AUTH_USER='your_username'")
+                    logger.info(f"   export API_SPEC_AUTH_PASS='your_password'")
+                    logger.info(f"   Then re-run the analysis")
+                logger.info(f"   Continuing with REST documentation link extraction as fallback")
 
             if failure_categories['parse']:
                 logger.warning(f"  - {len(failure_categories['parse'])} parse errors - specs may be malformed")

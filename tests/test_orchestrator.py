@@ -12,6 +12,21 @@ from claude_scraper.generators.orchestrator import (
     GenerationError,
 )
 from claude_scraper.generators.hybrid_generator import GeneratedFiles
+from claude_scraper.types import (
+    ValidatedSpec,
+    ValidationSummary,
+    ExecutiveSummary,
+    ScraperRecommendation,
+    EndpointDetails,
+    ComplexityLevel,
+    ConfidenceLevel,
+    ScraperType,
+    HTTPMethod,
+    ResponseFormat,
+    ValidationStatus,
+    AuthenticationSpec,
+    AuthenticationMethod,
+)
 
 
 # ============================================================================
@@ -40,6 +55,63 @@ def ba_spec_file(tmp_path, sample_ba_spec):
     spec_file = tmp_path / "validated_datasource_spec.json"
     spec_file.write_text(json.dumps(sample_ba_spec))
     return spec_file
+
+
+@pytest.fixture
+def mock_validated_spec():
+    """Create proper ValidatedSpec for mocking BA Analyzer output."""
+    return ValidatedSpec(
+        source="MISO",
+        source_type="API",
+        datasource="miso",
+        dataset="energy_pricing",
+        timestamp="2024-01-01T00:00:00Z",
+        url="https://api.test.com",
+        executive_summary=ExecutiveSummary(
+            total_endpoints_discovered=1,
+            accessible_endpoints=1,
+            success_rate="100%",
+            authentication_required=True,
+            estimated_scraper_complexity=ComplexityLevel.MEDIUM,
+        ),
+        validation_summary=ValidationSummary(
+            phases_completed=["phase0", "phase1", "phase2"],
+            documentation_review="Complete documentation available",
+            live_api_testing="All endpoints tested successfully",
+            discrepancies_found=0,
+            confidence_score=0.92,
+            confidence_level=ConfidenceLevel.HIGH,
+            recommendation="Proceed with scraper generation",
+        ),
+        authentication=AuthenticationSpec(
+            required=True,
+            method=AuthenticationMethod.API_KEY,
+            evidence="API key required in header",
+            notes="API key authentication required",
+        ),
+        scraper_recommendation=ScraperRecommendation(
+            type=ScraperType.API_CLIENT,
+            complexity=ComplexityLevel.MEDIUM,
+            estimated_effort="4 hours",
+            rationale=["REST API with clear documentation"],
+            key_challenges=["API authentication required"],
+        ),
+        endpoints=[
+            EndpointDetails(
+                endpoint_id="test_endpoint_1",
+                name="test_endpoint",
+                type="API",
+                base_url="https://api.test.com",
+                path="/api/v1/test",
+                method=HTTPMethod.GET,
+                response_format=ResponseFormat.JSON,
+                validation_status=ValidationStatus.TESTED_200_OK,
+                accessible=True,
+                last_tested="2024-01-01T00:00:00Z",
+                notes="Test endpoint for validation",
+            )
+        ],
+    )
 
 
 @pytest.fixture
@@ -80,17 +152,24 @@ def orchestrator(mock_hybrid_generator, tmp_path):
 # INITIALIZATION TESTS
 # ============================================================================
 
+@patch("claude_scraper.llm.create_llm_provider")
+@patch("claude_scraper.cli.config.Config")
 @patch("claude_scraper.generators.orchestrator.HybridGenerator")
-def test_orchestrator_initialization_defaults(mock_hybrid_generator_class):
+def test_orchestrator_initialization_defaults(mock_hybrid_generator_class, mock_config, mock_create_llm):
     """Test orchestrator initializes with default dependencies."""
-    # Mock HybridGenerator creation to avoid BAML requirement
+    # Mock LLM provider creation
+    mock_llm = Mock()
+    mock_create_llm.return_value = mock_llm
+    mock_config.from_env.return_value = Mock()
+
+    # Mock HybridGenerator creation
     mock_instance = Mock()
     mock_hybrid_generator_class.return_value = mock_instance
 
     orchestrator = ScraperOrchestrator()
 
-    # Verify HybridGenerator was created with no arguments (defaults)
-    mock_hybrid_generator_class.assert_called_once_with()
+    # Verify HybridGenerator was created with llm_provider
+    mock_hybrid_generator_class.assert_called_once_with(llm_provider=mock_llm)
     assert orchestrator.hybrid_generator is not None
     assert orchestrator.analysis_output_dir == Path("datasource_analysis")
 
@@ -116,7 +195,6 @@ async def test_generate_from_spec_success(orchestrator, ba_spec_file, tmp_path):
     result = await orchestrator.generate_from_spec(
         ba_spec_file=str(ba_spec_file),
         output_dir=tmp_path / "output",
-        requires_ai=False,
     )
 
     # Verify result
@@ -125,7 +203,8 @@ async def test_generate_from_spec_success(orchestrator, ba_spec_file, tmp_path):
     assert result.analysis_performed is False
     assert result.ba_spec_path == ba_spec_file
     assert result.generated_files is not None
-    assert result.generated_files.scraper_path is not None
+    assert len(result.generated_files) > 0
+    assert result.generated_files[0].scraper_path is not None
 
     # Verify generator was called
     orchestrator.hybrid_generator.generate_scraper.assert_called_once()
@@ -172,10 +251,10 @@ async def test_generate_from_spec_custom_output_dir(orchestrator, ba_spec_file, 
     result = await orchestrator.generate_from_spec(
         ba_spec_file=str(ba_spec_file),
         output_dir=custom_dir,
-        requires_ai=False,
     )
 
-    assert result.generated_files.scraper_path is not None
+    assert len(result.generated_files) > 0
+    assert result.generated_files[0].scraper_path is not None
     # Verify custom output dir was passed to generator
     call_args = orchestrator.hybrid_generator.generate_scraper.call_args
     assert call_args[1]["output_dir"] == custom_dir
@@ -186,13 +265,12 @@ async def test_generate_from_spec_smart_default_output_dir(orchestrator, ba_spec
     """Test generation with smart default output directory."""
     result = await orchestrator.generate_from_spec(
         ba_spec_file=str(ba_spec_file),
-        requires_ai=False,
     )
 
     # Verify smart default was used
     call_args = orchestrator.hybrid_generator.generate_scraper.call_args
     output_dir = call_args[1]["output_dir"]
-    assert "generated_scrapers" in str(output_dir)
+    assert "sourcing/scraping" in str(output_dir)
     assert "miso" in str(output_dir).lower()
 
 
@@ -213,23 +291,24 @@ async def test_generate_from_spec_generation_fails(orchestrator, ba_spec_file):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_generate_from_url_success(orchestrator, sample_ba_spec, tmp_path):
+async def test_generate_from_url_success(orchestrator, sample_ba_spec, mock_validated_spec, tmp_path):
     """Test successful generation from URL."""
     # Setup: Create BA spec file that BA Analyzer would create
     spec_file = orchestrator.analysis_output_dir / "validated_datasource_spec.json"
     spec_file.parent.mkdir(parents=True, exist_ok=True)
     spec_file.write_text(json.dumps(sample_ba_spec))
 
-    # Mock BA Analyzer
-    mock_validated_spec = Mock()
-    mock_validated_spec.source_type = "API"
-    mock_validated_spec.validation_summary = Mock(confidence_score=0.92)
-    mock_validated_spec.endpoints = [{"path": "/test"}]
-
-    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer:
+    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer, \
+         patch("claude_scraper.agents.ba_executive_summary_generator.BAExecutiveSummaryGenerator") as MockSummaryGen:
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.run_full_analysis = AsyncMock(return_value=mock_validated_spec)
         MockBAAnalyzer.return_value = mock_analyzer_instance
+
+        # Mock executive summary generator
+        mock_summary_gen = Mock()
+        mock_summary_gen.generate_summary = AsyncMock(return_value="# Executive Summary\nTest summary")
+        mock_summary_gen.get_summary_path = Mock(return_value=Path("datasource_analysis/executive_summary.md"))
+        MockSummaryGen.return_value = mock_summary_gen
 
         # Execute
         result = await orchestrator.generate_from_url(
@@ -272,17 +351,19 @@ async def test_generate_from_url_ba_analyzer_fails(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_generate_from_url_spec_file_not_created(orchestrator):
+async def test_generate_from_url_spec_file_not_created(orchestrator, mock_validated_spec):
     """Test handling when BA Analyzer doesn't create expected file."""
-    mock_validated_spec = Mock()
-    mock_validated_spec.source_type = "API"
-    mock_validated_spec.endpoints = []
-    mock_validated_spec.validation_summary.confidence_score = 0.9
-
-    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer:
+    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer, \
+         patch("claude_scraper.agents.ba_executive_summary_generator.BAExecutiveSummaryGenerator") as MockSummaryGen:
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.run_full_analysis = AsyncMock(return_value=mock_validated_spec)
         MockBAAnalyzer.return_value = mock_analyzer_instance
+
+        # Mock executive summary generator
+        mock_summary_gen = Mock()
+        mock_summary_gen.generate_summary = AsyncMock(return_value="# Executive Summary\nTest summary")
+        mock_summary_gen.get_summary_path = Mock(return_value=Path("datasource_analysis/executive_summary.md"))
+        MockSummaryGen.return_value = mock_summary_gen
 
         # Don't create the spec file - BA Analyzer "forgot" to write it
         with pytest.raises(BAAnalysisError, match="did not create expected output file"):
@@ -290,28 +371,29 @@ async def test_generate_from_url_spec_file_not_created(orchestrator):
 
 
 @pytest.mark.asyncio
-async def test_generate_from_url_generation_fails(orchestrator, sample_ba_spec, tmp_path):
+async def test_generate_from_url_generation_fails(orchestrator, sample_ba_spec, mock_validated_spec, tmp_path):
     """Test handling of generation failure after successful BA analysis."""
     # Setup spec file
     spec_file = orchestrator.analysis_output_dir / "validated_datasource_spec.json"
     spec_file.parent.mkdir(parents=True, exist_ok=True)
     spec_file.write_text(json.dumps(sample_ba_spec))
 
-    # Mock BA Analyzer success
-    mock_validated_spec = Mock()
-    mock_validated_spec.source_type = "API"
-    mock_validated_spec.validation_summary = Mock(confidence_score=0.92)
-    mock_validated_spec.endpoints = []
-
     # Mock generator failure
     orchestrator.hybrid_generator.generate_scraper = AsyncMock(
         side_effect=RuntimeError("Template rendering failed")
     )
 
-    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer:
+    with patch("claude_scraper.agents.ba_analyzer.BAAnalyzer") as MockBAAnalyzer, \
+         patch("claude_scraper.agents.ba_executive_summary_generator.BAExecutiveSummaryGenerator") as MockSummaryGen:
         mock_analyzer_instance = Mock()
         mock_analyzer_instance.run_full_analysis = AsyncMock(return_value=mock_validated_spec)
         MockBAAnalyzer.return_value = mock_analyzer_instance
+
+        # Mock executive summary generator
+        mock_summary_gen = Mock()
+        mock_summary_gen.generate_summary = AsyncMock(return_value="# Executive Summary\nTest summary")
+        mock_summary_gen.get_summary_path = Mock(return_value=Path("datasource_analysis/executive_summary.md"))
+        MockSummaryGen.return_value = mock_summary_gen
 
         with pytest.raises(GenerationError, match="Scraper generation failed"):
             await orchestrator.generate_from_url(url="https://api.test.com")
@@ -330,7 +412,6 @@ async def test_generate_scraper_routes(orchestrator, sample_ba_spec, tmp_path, s
     result = await orchestrator._generate_scraper(
         ba_spec_dict=sample_ba_spec,
         output_dir=tmp_path / "output",
-        requires_ai=False,
     )
 
     assert result is not None
@@ -346,8 +427,7 @@ async def test_generate_scraper_unsupported_source_type(orchestrator, sample_ba_
         await orchestrator._generate_scraper(
             ba_spec_dict=sample_ba_spec,
             output_dir=tmp_path / "output",
-            requires_ai=False,
-        )
+            )
 
 
 # ============================================================================
@@ -358,7 +438,7 @@ def test_determine_output_dir(orchestrator, sample_ba_spec):
     """Test smart output directory determination."""
     output_dir = orchestrator._determine_output_dir(sample_ba_spec)
 
-    assert "generated_scrapers" in str(output_dir)
+    assert "sourcing/scraping" in str(output_dir)
     assert "miso" in str(output_dir).lower()
 
 
@@ -406,16 +486,16 @@ async def test_full_generation_workflow_from_spec(orchestrator, ba_spec_file):
     """Test full generation workflow from spec file to output."""
     result = await orchestrator.generate_from_spec(
         ba_spec_file=str(ba_spec_file),
-        requires_ai=False,
     )
 
     # Verify complete result
     assert result.generated_files is not None
     assert result.source_type == "API"
     assert result.analysis_performed is False
-    assert result.generated_files.scraper_path is not None
-    assert result.generated_files.test_path is not None
+    assert len(result.generated_files) > 0
+    assert result.generated_files[0].scraper_path is not None
+    assert result.generated_files[0].test_path is not None
 
     # Verify generator was called with correct args
     call_args = orchestrator.hybrid_generator.generate_scraper.call_args
-    assert call_args[1]["requires_ai"] is False
+    assert call_args is not None

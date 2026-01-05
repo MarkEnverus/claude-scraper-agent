@@ -32,7 +32,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from baml_client.baml_client.types import (
+from claude_scraper.types import (
     AuthenticationMethod,
     ComplexityLevel,
     ConfidenceLevel,
@@ -83,15 +83,9 @@ def mock_phase0():
         confidence=0.90,
         indicators=["REST API", "JSON responses", "Swagger docs"],
         discovered_api_calls=["https://api.example.com/v1/data"],
-        endpoints=[
-            Endpoint(
-                path="/api/v1/data",
-                method=HTTPMethod.GET,
-                parameters=[],
-                auth_required=False,
-                response_format=ResponseFormat.JSON,
-            )
-        ],
+        discovered_endpoint_urls=["https://api.example.com/v1/data"],
+        auth_method="API_KEY",
+        base_url="https://api.example.com",
         url="https://api.example.com",
     )
 
@@ -135,6 +129,8 @@ def mock_phase3_high_confidence():
     return ValidatedSpec(
         source="BA Analyzer",
         source_type="API",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-12-18T10:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -191,6 +187,8 @@ def mock_phase3_low_confidence():
     return ValidatedSpec(
         source="BA Analyzer",
         source_type="API",
+        datasource="example_api",
+        dataset="test_data",
         timestamp="2025-12-18T10:00:00Z",
         url="https://api.example.com",
         executive_summary=ExecutiveSummary(
@@ -259,7 +257,7 @@ def mock_validation_high_confidence():
 @pytest.fixture
 def mock_validation_low_confidence():
     """Mock validation report with low confidence."""
-    from baml_client.baml_client.types import CriticalGap
+    from claude_scraper.types import CriticalGap
 
     return ValidationReport(
         validation_timestamp="2025-12-18T10:00:00Z",
@@ -344,13 +342,12 @@ def test_cli_analyze_basic_execution(
     """Test basic analyze command execution with mocked pipeline."""
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock analyzer
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_high_confidence)
@@ -384,9 +381,7 @@ def test_cli_analyze_with_debug_flag(runner, temp_output_dir):
     """Test that debug flag enables verbose logging."""
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Setup minimal mocks
         mock_analyzer = MockAnalyzer.return_value
@@ -410,9 +405,7 @@ def test_cli_analyze_invalid_url_format(runner, temp_output_dir):
     """Test error handling for malformed URLs."""
     # Note: URL validation might happen at different layers
     # This test verifies graceful error handling
-    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer:
 
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(
@@ -444,13 +437,12 @@ def test_cli_analyze_custom_output_dir(
 
         with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
              patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-             patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-             patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-             patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+             patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
             # Mock analyzer
             mock_analyzer = MockAnalyzer.return_value
             mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+            mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
             mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1)
             mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2)
             mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_high_confidence)
@@ -495,13 +487,12 @@ async def test_full_pipeline_execution_skip_run2(
 
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock analyzer
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2)
         mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_high_confidence)
@@ -547,13 +538,12 @@ async def test_full_pipeline_execution_with_run2(
     with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
          patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
          patch("claude_scraper.orchestration.nodes.BACollator") as MockCollator, \
-         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+         patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
         # Mock analyzer (Run 1 returns low confidence, Run 2 returns high)
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1)
         mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2)
         mock_analyzer.analyze_phase3 = AsyncMock(
@@ -600,13 +590,12 @@ async def test_pipeline_error_handling_in_run1(mock_phase0):
 
     initial_state: AnalysisState = {"url": "https://api.example.com"}
 
-    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
-         patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-         patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+    with patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer:
 
         # Mock analyzer to fail at Phase 1
         mock_analyzer = MockAnalyzer.return_value
         mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+        mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
         mock_analyzer.analyze_phase1 = AsyncMock(
             side_effect=Exception("Phase 1 failed - network timeout")
         )
@@ -633,9 +622,7 @@ async def test_pipeline_file_output_generation(
         with patch("claude_scraper.orchestration.nodes.AnalysisRepository") as MockRepo, \
              patch("claude_scraper.orchestration.nodes.BAAnalyzer") as MockAnalyzer, \
              patch("claude_scraper.orchestration.nodes.BAValidator") as MockValidator, \
-             patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA, \
-             patch("claude_scraper.orchestration.nodes.WebFetchTool"), \
-             patch("claude_scraper.orchestration.nodes.PuppeteerTool"):
+             patch("claude_scraper.orchestration.nodes.EndpointQATester") as MockQA:
 
             # Mock repository
             mock_repo = MockRepo.return_value
@@ -644,6 +631,7 @@ async def test_pipeline_file_output_generation(
             # Mock analyzer
             mock_analyzer = MockAnalyzer.return_value
             mock_analyzer.analyze_phase0 = AsyncMock(return_value=mock_phase0)
+            mock_analyzer.analyze_endpoints = AsyncMock(return_value=[])
             mock_analyzer.analyze_phase1 = AsyncMock(return_value=mock_phase1)
             mock_analyzer.analyze_phase2 = AsyncMock(return_value=mock_phase2)
             mock_analyzer.analyze_phase3 = AsyncMock(return_value=mock_phase3_high_confidence)
