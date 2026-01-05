@@ -50,7 +50,7 @@ class AnthropicProvider:
 
     def __init__(
         self,
-        model_id: str = "claude-sonnet-4-5-20251101",
+        model_id: str = "claude-sonnet-4-5-20250929",
         api_key: Optional[str] = None,
         max_retries: int = 3,
         base_delay: float = 1.0,
@@ -144,7 +144,9 @@ class AnthropicProvider:
                 if system:
                     kwargs["system"] = system
 
+                start = time.time()
                 response = self.client.messages.create(**kwargs)
+                elapsed = time.time() - start
 
                 # Extract text from response
                 if not response.content:
@@ -162,6 +164,7 @@ class AnthropicProvider:
                         "attempts": attempt + 1
                     }
                 )
+                logger.info(f"[PERF] Anthropic API call: {elapsed:.2f}s, {len(text)} chars")
 
                 return text
 

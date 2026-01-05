@@ -13,6 +13,8 @@ from typing import Optional
 from botasaurus.browser import Driver
 from markdownify import markdownify as md
 
+from claude_scraper.utils.profiling import profile_time
+
 logger = logging.getLogger(__name__)
 
 
@@ -181,6 +183,7 @@ class BotasaurusTool:
         """
         raise NotImplementedError("JavaScript evaluation not yet implemented")
 
+    @profile_time("Botasaurus: Extract comprehensive data")
     def extract_comprehensive_data(self, url: str) -> dict:
         """Extract EVERYTHING needed for AI-based endpoint discovery.
 
@@ -849,6 +852,7 @@ class BotasaurusTool:
             logger.debug(f"    Error details: {str(e)[:100]}")
             return ""
 
+    @profile_time("Botasaurus: Extract operation URLs")
     def extract_operation_urls(self, url: str, operation_names: list[str]) -> dict[str, str]:
         """Extract actual operation URLs by clicking on operations.
 
@@ -1229,6 +1233,7 @@ class BotasaurusTool:
             logger.error(f"Error detecting SPA hash routing: {e}")
             return None
 
+    @profile_time("Botasaurus: Fetch API spec")
     def try_fetch_api_spec(
         self,
         url: str,

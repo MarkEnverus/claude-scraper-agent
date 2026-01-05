@@ -12,10 +12,12 @@ Example:
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 
 from claude_scraper.llm.base import LLMProvider
+from claude_scraper.utils.profiling import profile_time
 from claude_scraper.types import (
     EndpointAnalysis,
     Phase0Detection,
@@ -81,6 +83,7 @@ class BAAnalyzer:
             },
         )
 
+    @profile_time("Phase 0: Detection")
     async def analyze_phase0(self, url: str) -> Phase0Detection:
         """Phase 0: AI-driven iterative data source detection.
 
@@ -129,6 +132,7 @@ class BAAnalyzer:
         # Iteration loop: AI-driven page navigation
         while pages_to_visit and len(visited) < max_pages:
             current_url = pages_to_visit.pop(0)
+            page_start = time.time()
 
             # Skip if already visited
             if current_url in visited:
@@ -215,6 +219,9 @@ class BAAnalyzer:
                 logger.info(f"  - URLs to visit: {len(analysis.urls_to_visit)}")
                 logger.info(f"  - Endpoints found so far: {len(analysis.discovered_endpoint_urls)}")
                 logger.info(f"  - Reasoning: {analysis.reasoning[:100]}...")
+
+                page_elapsed = time.time() - page_start
+                logger.info(f"[PERF] Iterative discovery page {len(visited)}: {page_elapsed:.2f}s, total endpoints: {len(analysis.discovered_endpoint_urls)}")
 
                 # Step 3: Check if AI wants to continue
                 if not analysis.needs_more_pages:
@@ -839,6 +846,7 @@ class BAAnalyzer:
 
         return results
 
+    @profile_time("Phase 1: Documentation")
     async def analyze_phase1(
         self,
         url: str,
@@ -1005,6 +1013,7 @@ class BAAnalyzer:
             )
             raise Exception(f"Phase 1 analysis failed for {url}: {e}") from e
 
+    @profile_time("Phase 2: Testing")
     async def analyze_phase2(
         self, url: str, phase0: Phase0Detection, phase1: Phase1Documentation
     ) -> Phase2Tests:
@@ -1053,6 +1062,8 @@ class BAAnalyzer:
         test_results = []
 
         for idx, endpoint in enumerate(phase1.endpoints):
+            start = time.time()
+
             # Build full URL
             if endpoint.path.startswith("http"):
                 endpoint_url = endpoint.path
@@ -1108,6 +1119,9 @@ class BAAnalyzer:
                     extra={"endpoint": endpoint_url, "status": status_code}
                 )
 
+                elapsed = time.time() - start
+                logger.info(f"[PERF] Endpoint {idx+1}/{len(phase1.endpoints)}: {endpoint_url} - {elapsed:.2f}s")
+
             except requests.exceptions.RequestException as e:
                 logger.warning(f"Request failed for {endpoint_url}: {e}")
                 test_results.append({
@@ -1119,6 +1133,9 @@ class BAAnalyzer:
                     "body_preview": str(e),
                     "test_type": "no_auth"
                 })
+
+                elapsed = time.time() - start
+                logger.info(f"[PERF] Endpoint {idx+1}/{len(phase1.endpoints)}: {endpoint_url} - {elapsed:.2f}s (failed)")
 
             # Rate limiting: wait 1 second between requests
             if idx < len(phase1.endpoints) - 1:
@@ -1206,6 +1223,7 @@ class BAAnalyzer:
             )
             raise Exception(f"Phase 2 analysis failed for {url}: {e}") from e
 
+    @profile_time("Phase 3: Validation")
     async def analyze_phase3(
         self,
         url: str,
