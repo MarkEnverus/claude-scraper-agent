@@ -2,7 +2,7 @@
 
 import pytest
 
-from claude_scraper.types.enums import (
+from agentic_scraper.types.enums import (
     ScraperMethod,
     DataFormat,
     AuthenticationMethod,

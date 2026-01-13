@@ -5,8 +5,8 @@ from pathlib import Path
 from typing import Type, Any
 from pydantic import BaseModel, Field
 
-from claude_scraper.llm.base import LLMProvider
-from claude_scraper.types import (
+from agentic_scraper.llm.base import LLMProvider
+from agentic_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
@@ -218,8 +218,8 @@ def mock_llm_provider():
 @pytest.fixture
 def ba_analyzer(mock_llm_provider, tmp_path):
     """Fixture providing BAAnalyzer with mock provider."""
-    from claude_scraper.agents.ba_analyzer import BAAnalyzer
-    from claude_scraper.storage.repository import AnalysisRepository
+    from agentic_scraper.agents.ba_analyzer import BAAnalyzer
+    from agentic_scraper.storage.repository import AnalysisRepository
 
     repository = AnalysisRepository(tmp_path / "analysis")
     return BAAnalyzer(

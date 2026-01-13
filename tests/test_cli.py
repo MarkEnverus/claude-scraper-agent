@@ -5,9 +5,9 @@ from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 from click.testing import CliRunner
 
-from claude_scraper.cli.main import cli
-from claude_scraper.fixers.fixer import FixerResult
-from claude_scraper.fixers.updater import UpdaterResult, ScraperInfo
+from agentic_scraper.cli.main import cli
+from agentic_scraper.fixers.fixer import FixerResult
+from agentic_scraper.fixers.updater import UpdaterResult, ScraperInfo
 
 
 # ============================================================================

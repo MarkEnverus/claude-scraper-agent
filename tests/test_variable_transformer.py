@@ -2,7 +2,7 @@
 
 import pytest
 
-from claude_scraper.generators.variable_transformer import VariableTransformer
+from agentic_scraper.generators.variable_transformer import VariableTransformer
 
 
 # ============================================================================

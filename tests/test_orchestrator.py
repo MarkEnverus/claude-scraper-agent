@@ -5,14 +5,14 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch, MagicMock
 
-from claude_scraper.generators.orchestrator import (
+from agentic_scraper.generators.orchestrator import (
     ScraperOrchestrator,
     OrchestrationResult,
     BAAnalysisError,
     GenerationError,
 )
-from claude_scraper.generators.hybrid_generator import GeneratedFiles
-from claude_scraper.types import (
+from agentic_scraper.generators.hybrid_generator import GeneratedFiles
+from agentic_scraper.types import (
     ValidatedSpec,
     ValidationSummary,
     ExecutiveSummary,

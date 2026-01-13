@@ -4,8 +4,8 @@ import pytest
 from unittest.mock import MagicMock, Mock, patch
 from pathlib import Path
 
-from claude_scraper.agents.ba_validator import BAValidator, RUN2_CONFIDENCE_THRESHOLD
-from claude_scraper.types import (
+from agentic_scraper.agents.ba_validator import BAValidator, RUN2_CONFIDENCE_THRESHOLD
+from agentic_scraper.types import (
     Phase0Detection,
     Phase1Documentation,
     Phase2Tests,
@@ -32,7 +32,7 @@ from claude_scraper.types import (
     PhaseValidation,
     CriticalGap,
 )
-from claude_scraper.storage.repository import AnalysisRepository
+from agentic_scraper.storage.repository import AnalysisRepository
 
 
 # ============================================================================

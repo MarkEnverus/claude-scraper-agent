@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from jinja2 import TemplateNotFound, TemplateSyntaxError
 
-from claude_scraper.generators.template_renderer import TemplateRenderer
+from agentic_scraper.generators.template_renderer import TemplateRenderer
 
 
 # ============================================================================

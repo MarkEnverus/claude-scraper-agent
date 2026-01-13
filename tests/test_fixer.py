@@ -4,7 +4,7 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, patch, AsyncMock
 
-from claude_scraper.fixers.fixer import ScraperFixer, FixerResult
+from agentic_scraper.fixers.fixer import ScraperFixer, FixerResult
 
 
 # ============================================================================

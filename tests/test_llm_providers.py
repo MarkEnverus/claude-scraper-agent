@@ -6,12 +6,12 @@ factory creation, and error handling.
 
 import pytest
 from unittest.mock import Mock, patch, MagicMock
-from claude_scraper.llm import (
+from agentic_scraper.llm import (
     BedrockProvider,
     AnthropicProvider,
     create_llm_provider
 )
-from claude_scraper.cli.config import Config
+from agentic_scraper.cli.config import Config
 
 
 class TestBedrockProvider:

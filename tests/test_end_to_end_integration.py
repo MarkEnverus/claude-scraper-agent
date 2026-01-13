@@ -13,8 +13,8 @@ import pytest
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, patch
 
-from claude_scraper.generators.orchestrator import ScraperOrchestrator
-from claude_scraper.generators.hybrid_generator import HybridGenerator
+from agentic_scraper.generators.orchestrator import ScraperOrchestrator
+from agentic_scraper.generators.hybrid_generator import HybridGenerator
 
 
 # ============================================================================

@@ -1,7 +1,7 @@
 """Unit tests for prompt generation functions."""
 
 import pytest
-from claude_scraper.prompts.scraper_generator import (
+from agentic_scraper.prompts.scraper_generator import (
     generate_collect_content_prompt,
     generate_validate_content_prompt,
     generate_complex_auth_prompt

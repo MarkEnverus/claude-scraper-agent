@@ -8,7 +8,7 @@ import pytest
 import tempfile
 from pathlib import Path
 from pydantic import BaseModel, ValidationError
-from claude_scraper.storage import AnalysisRepository
+from agentic_scraper.storage import AnalysisRepository
 
 
 class TestModel(BaseModel):

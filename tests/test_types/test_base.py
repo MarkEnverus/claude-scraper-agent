@@ -3,7 +3,7 @@
 import pytest
 from datetime import datetime
 
-from claude_scraper.types.base import ValidationResult, Metadata, BaseScraperConfig
+from agentic_scraper.types.base import ValidationResult, Metadata, BaseScraperConfig
 
 
 def test_validation_result_valid() -> None:

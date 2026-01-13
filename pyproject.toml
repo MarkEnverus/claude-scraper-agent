@@ -1,5 +1,5 @@
 [project]
-name = "claude-scraper"
+name = "agentic-scraper"
 version = "2.0.0"
 description = "Type-safe scraper generation with LangGraph + Claude Structured Outputs"
 requires-python = ">=3.11"
@@ -34,14 +34,14 @@ repository = "https://github.com/mark.johnson/claude_scraper_agent"
 issues = "https://github.com/mark.johnson/claude_scraper_agent/issues"
 
 [project.scripts]
-claude-scraper = "claude_scraper.cli.main:cli"
+agentic-scraper = "agentic_scraper.business_analyst.cli:main"
 
 [build-system]
 requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-include = ["claude_scraper*"]
+include = ["agentic_scraper*"]
 exclude = ["tests*", "plugin*", "infrastructure*"]
 
 [tool.mypy]
@@ -122,7 +122,7 @@ exclude = [
 "test_*.py" = ["T201"]
 
 [tool.ruff.isort]
-known-first-party = ["claude_scraper"]
+known-first-party = ["agentic_scraper"]
 section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
 
 [tool.ruff.format]

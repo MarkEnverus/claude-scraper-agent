@@ -6,8 +6,8 @@ from datetime import datetime
 import pytest
 from pydantic import ValidationError
 
-from claude_scraper.types import Metadata
-from claude_scraper.types.scraper_spec import (
+from agentic_scraper.types import Metadata
+from agentic_scraper.types.scraper_spec import (
     APIConfig,
     EmailConfig,
     FTPConfig,
@@ -311,7 +311,7 @@ def test_website_config_validation() -> None:
 
 def test_scraper_spec_api() -> None:
     """Test ScraperSpec with APIConfig."""
-    from claude_scraper.types.enums import ScraperMethod
+    from agentic_scraper.types.enums import ScraperMethod
 
     api_config = APIConfig(
         data_source="NYISO",
@@ -338,7 +338,7 @@ def test_scraper_spec_api() -> None:
 
 def test_scraper_spec_ftp() -> None:
     """Test ScraperSpec with FTPConfig."""
-    from claude_scraper.types.enums import ScraperMethod
+    from agentic_scraper.types.enums import ScraperMethod
 
     ftp_config = FTPConfig(
         data_source="TEST",
@@ -364,7 +364,7 @@ def test_scraper_spec_ftp() -> None:
 
 def test_scraper_spec_validation() -> None:
     """Test ScraperSpec validation."""
-    from claude_scraper.types.enums import ScraperMethod
+    from agentic_scraper.types.enums import ScraperMethod
 
     config = APIConfig(
         data_source="TEST",
@@ -390,7 +390,7 @@ def test_scraper_spec_validation() -> None:
 
 def test_scraper_spec_serialization() -> None:
     """Test ScraperSpec JSON serialization."""
-    from claude_scraper.types.enums import ScraperMethod
+    from agentic_scraper.types.enums import ScraperMethod
 
     config = APIConfig(
         data_source="TEST",

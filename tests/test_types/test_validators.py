@@ -1,6 +1,6 @@
 """Tests for business logic validators."""
 
-from claude_scraper.types.validators import (
+from agentic_scraper.types.validators import (
     validate_css_selector,
     validate_email_address,
     validate_file_pattern,

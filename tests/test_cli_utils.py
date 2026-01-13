@@ -5,7 +5,7 @@ import asyncio
 from pathlib import Path
 from unittest.mock import Mock, patch
 
-from claude_scraper.cli.utils import (
+from agentic_scraper.cli.utils import (
     retry_on_error,
     RetryableError,
     UserError,

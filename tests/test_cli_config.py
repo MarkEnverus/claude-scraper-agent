@@ -2,7 +2,7 @@
 
 import os
 import pytest
-from claude_scraper.cli.config import Config
+from agentic_scraper.cli.config import Config
 
 
 def test_bedrock_config_defaults():

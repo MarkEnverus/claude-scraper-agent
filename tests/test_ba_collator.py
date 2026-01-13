@@ -7,7 +7,7 @@ analysis results with weighted confidence scoring.
 import pytest
 from unittest.mock import Mock, patch
 
-from claude_scraper.types import (
+from agentic_scraper.types import (
     AuthenticationMethod,
     CollationResult,
     ComplexityLevel,
@@ -27,8 +27,8 @@ from claude_scraper.types import (
     ValidationSummary,
 )
 
-from claude_scraper.agents.ba_collator import BACollator
-from claude_scraper.storage.repository import AnalysisRepository
+from agentic_scraper.agents.ba_collator import BACollator
+from agentic_scraper.storage.repository import AnalysisRepository
 
 
 # =============================================================================
