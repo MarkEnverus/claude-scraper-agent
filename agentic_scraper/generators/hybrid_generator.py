@@ -16,7 +16,8 @@ from pydantic import BaseModel, Field
 
 from agentic_scraper.generators.variable_transformer import VariableTransformer
 from agentic_scraper.generators.template_renderer import TemplateRenderer
-from agentic_scraper.infrastructure_manager import InfrastructureManager
+from agentic_scraper.infrastructure_manager import InfrastructureManager, ALL_INFRASTRUCTURE_FILES
+from agentic_scraper.utils.infra_paths import resolve_commons_source
 from agentic_scraper.validators import (
     ValidationConfig,
     InterfaceExtractor,
@@ -95,8 +96,11 @@ class HybridGenerator:
     def _ensure_sourcing_commons(self) -> bool:
         """Ensure sourcing/commons/ exists with all commons files.
 
-        Copies files from /commons/ to sourcing/commons/ if they don't exist
-        or are outdated.
+        Uses resolver to find source commons, then:
+        - If source IS sourcing/commons: validate and return True (no-op)
+        - If source is elsewhere: copy to sourcing/commons/
+
+        This method is idempotent and handles self-copy edge case.
 
         Returns:
             True if sourcing/commons/ is ready, False otherwise
@@ -104,42 +108,42 @@ class HybridGenerator:
         import shutil
         from pathlib import Path
 
-        commons_src = Path("commons")
-        commons_dst = Path("sourcing/commons")
+        # Use resolver to find commons source
+        commons_src = resolve_commons_source()
+        commons_dst = (Path.cwd() / "sourcing" / "commons").resolve()
 
-        if not commons_src.exists():
-            raise FileNotFoundError(
-                "commons/ directory not found. Did you rename infrastructure/ to commons/?"
-            )
+        # Edge case: source is already target (no self-copy)
+        if commons_src == commons_dst:
+            logger.info(f"Commons source is already target: {commons_dst}")
+            # Validate files exist (resolver did this, but double-check)
+            for filename in ALL_INFRASTRUCTURE_FILES:
+                if not (commons_dst / filename).exists():
+                    raise FileNotFoundError(
+                        f"Commons file missing: {filename} in {commons_dst}"
+                    )
+            return True
 
-        # Create sourcing/commons/ if doesn't exist
+        # Create target directory
         commons_dst.mkdir(parents=True, exist_ok=True)
+        logger.info(f"Copying commons from {commons_src} to {commons_dst}")
 
-        # Copy all commons files
-        commons_files = [
-            "collection_framework.py",
-            "hash_registry.py",
-            "s3_utils.py",
-            "kafka_utils.py",
-            "logging_json.py",
-        ]
-
-        for filename in commons_files:
+        # Copy all files
+        for filename in ALL_INFRASTRUCTURE_FILES:
             src_file = commons_src / filename
             dst_file = commons_dst / filename
 
             if not src_file.exists():
-                print(f"Warning: Commons file not found: {src_file}")
+                logger.warning(f"Commons file not found: {src_file}")
                 continue
 
-            # Copy file (overwrite if exists to ensure up-to-date)
             shutil.copy2(src_file, dst_file)
+            logger.debug(f"Copied {filename}")
 
-        # Create __init__.py if doesn't exist
+        # Create __init__.py
         init_file = commons_dst / "__init__.py"
         if not init_file.exists():
             init_file.write_text(
-                '"""Sourcing commons - infrastructure utilities for data collectors."""\n',
+                '"""Sourcing commons - infrastructure utilities."""\n',
                 encoding="utf-8"
             )
 

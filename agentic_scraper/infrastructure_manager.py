@@ -13,6 +13,8 @@ import re
 from pathlib import Path
 from typing import Optional
 
+from agentic_scraper.utils.infra_paths import resolve_commons_source
+
 logger = logging.getLogger(__name__)
 
 # Current infrastructure version
@@ -31,20 +33,30 @@ ALL_INFRASTRUCTURE_FILES = [
 class InfrastructureManager:
     """Manage infrastructure bundling and copying for scrapers."""
 
-    def __init__(self, infrastructure_source: Optional[Path] = None):
+    def __init__(
+        self,
+        infrastructure_source: Optional[Path] = None,
+        repo_root: Optional[Path] = None
+    ):
         """Initialize infrastructure manager.
 
         Args:
             infrastructure_source: Path to source infrastructure files
-                (default: ./commons/ relative to project root)
+                (default: auto-resolve using resolve_commons_source)
+            repo_root: Repository root for path resolution (default: auto-detect)
         """
-        self.source = infrastructure_source or Path("commons")
+        if infrastructure_source:
+            self.source = Path(infrastructure_source).resolve()
 
-        if not self.source.exists():
-            raise FileNotFoundError(
-                f"Infrastructure source not found: {self.source}\n"
-                f"Expected directory with files: {', '.join(ALL_INFRASTRUCTURE_FILES)}"
-            )
+            # Validate provided path
+            if not self.source.exists():
+                raise FileNotFoundError(
+                    f"Infrastructure source not found: {self.source}\n"
+                    f"Expected directory with files: {', '.join(ALL_INFRASTRUCTURE_FILES)}"
+                )
+        else:
+            # Auto-resolve using new resolver
+            self.source = resolve_commons_source(repo_root=repo_root)
 
         logger.info(f"Initialized InfrastructureManager: source={self.source}")
 

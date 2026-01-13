@@ -101,11 +101,11 @@ def ba_spec_file(tmp_path, realistic_ba_spec):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path, mock_llm_factory):
     """Test complete workflow from BA spec file to generated scraper files."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -142,11 +142,11 @@ async def test_e2e_orchestrator_to_generated_files(ba_spec_file, tmp_path, mock_
 
 
 @pytest.mark.asyncio
-async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path, mock_llm_factory):
     """Test generated scraper code is syntactically valid Python."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -175,11 +175,11 @@ async def test_e2e_generated_scraper_is_valid_python(ba_spec_file, tmp_path, moc
 
 
 @pytest.mark.asyncio
-async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path, mock_llm_factory):
     """Test generated test file is syntactically valid Python."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -206,11 +206,11 @@ async def test_e2e_generated_tests_are_valid_python(ba_spec_file, tmp_path, mock
 
 
 @pytest.mark.asyncio
-async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path, mock_llm_factory):
     """Test generated README contains all required sections."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "miso"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -233,11 +233,11 @@ async def test_e2e_readme_contains_required_sections(ba_spec_file, tmp_path, moc
 
 
 @pytest.mark.asyncio
-async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path, mock_llm_provider):
+async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path, mock_llm_factory):
     """Test HybridGenerator directly (bypass orchestrator)."""
     # Setup
     output_dir = tmp_path / "generated_scrapers" / "direct_test"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
 
     # Execute
     result = await generator.generate_scraper(
@@ -263,7 +263,7 @@ async def test_e2e_hybrid_generator_directly(realistic_ba_spec, tmp_path, mock_l
 
 
 @pytest.mark.asyncio
-async def test_e2e_multiple_source_types(tmp_path, mock_llm_provider):
+async def test_e2e_multiple_source_types(tmp_path, mock_llm_factory):
     """Test generation for all supported source types."""
     source_types = ["API", "FTP", "WEBSITE", "EMAIL"]
 
@@ -290,7 +290,7 @@ async def test_e2e_multiple_source_types(tmp_path, mock_llm_provider):
 
         # Generate scraper
         output_dir = tmp_path / "source_types" / source_type.lower()
-        generator = HybridGenerator(llm_provider=mock_llm_provider)
+        generator = HybridGenerator(factory=mock_llm_factory)
 
         result = await generator.generate_scraper(
             ba_spec=ba_spec,
@@ -307,10 +307,10 @@ async def test_e2e_multiple_source_types(tmp_path, mock_llm_provider):
 
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path, mock_llm_factory):
     """Test orchestrator creates smart default output directory."""
     # Setup
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -330,7 +330,7 @@ async def test_e2e_orchestrator_smart_output_dir(ba_spec_file, tmp_path, mock_ll
 
 
 @pytest.mark.asyncio
-async def test_e2e_validation_error_handling(tmp_path, mock_llm_provider):
+async def test_e2e_validation_error_handling(tmp_path, mock_llm_factory):
     """Test end-to-end validation error handling."""
     # Create invalid BA spec (missing required fields)
     invalid_spec = {
@@ -340,7 +340,7 @@ async def test_e2e_validation_error_handling(tmp_path, mock_llm_provider):
     }
 
     # Generate scraper should fail with validation error
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     output_dir = tmp_path / "invalid_test"
 
     with pytest.raises(ValueError, match="validation failed"):
@@ -351,11 +351,11 @@ async def test_e2e_validation_error_handling(tmp_path, mock_llm_provider):
 
 
 @pytest.mark.asyncio
-async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path, mock_llm_provider):
+async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path, mock_llm_factory):
     """Test generated files follow naming conventions."""
     # Setup
     output_dir = tmp_path / "naming_test"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
     orchestrator = ScraperOrchestrator(
         hybrid_generator=generator,
         analysis_output_dir=ba_spec_file.parent
@@ -391,7 +391,7 @@ async def test_e2e_file_naming_conventions(ba_spec_file, tmp_path, mock_llm_prov
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_orchestrator_routes_correctly(tmp_path, mock_llm_provider):
+async def test_e2e_orchestrator_routes_correctly(tmp_path, mock_llm_factory):
     """Test orchestrator correctly routes to HybridGenerator for all source types."""
     source_types = ["API", "FTP", "WEBSITE", "EMAIL"]
 
@@ -417,7 +417,7 @@ async def test_e2e_orchestrator_routes_correctly(tmp_path, mock_llm_provider):
         spec_file.write_text(json.dumps(ba_spec))
 
         # Generate via orchestrator
-        generator = HybridGenerator(llm_provider=mock_llm_provider)
+        generator = HybridGenerator(factory=mock_llm_factory)
         orchestrator = ScraperOrchestrator(
             hybrid_generator=generator,
             analysis_output_dir=analysis_dir
@@ -437,13 +437,13 @@ async def test_e2e_orchestrator_routes_correctly(tmp_path, mock_llm_provider):
 # ============================================================================
 
 @pytest.mark.asyncio
-async def test_e2e_generation_performance(realistic_ba_spec, tmp_path, mock_llm_provider):
+async def test_e2e_generation_performance(realistic_ba_spec, tmp_path, mock_llm_factory):
     """Test generation completes in reasonable time."""
     import time
 
     # Setup
     output_dir = tmp_path / "performance_test"
-    generator = HybridGenerator(llm_provider=mock_llm_provider)
+    generator = HybridGenerator(factory=mock_llm_factory)
 
     # Execute: Measure time
     start_time = time.time()

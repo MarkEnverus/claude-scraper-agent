@@ -216,6 +216,30 @@ def mock_llm_provider():
 
 
 @pytest.fixture
+def mock_llm_factory(mock_llm_provider):
+    """Fixture providing mock LLMFactory that wraps MockLLMProvider.
+
+    This allows tests to use the new HybridGenerator(factory=...) signature
+    while still using the existing MockLLMProvider implementation.
+    """
+    from unittest.mock import Mock
+    from agentic_scraper.llm.factory import LLMFactory
+
+    factory = Mock(spec=LLMFactory)
+
+    # create_reasoning_model() returns the mock provider (has invoke_structured)
+    factory.create_reasoning_model.return_value = mock_llm_provider
+
+    # invoke_structured() delegates to mock provider
+    async def mock_invoke_structured(llm, prompt, response_model, system=""):
+        return await mock_llm_provider.invoke_structured(prompt, response_model, system)
+
+    factory.invoke_structured = mock_invoke_structured
+
+    return factory
+
+
+@pytest.fixture
 def ba_analyzer(mock_llm_provider, tmp_path):
     """Fixture providing BAAnalyzer with mock provider."""
     from agentic_scraper.agents.ba_analyzer import BAAnalyzer
