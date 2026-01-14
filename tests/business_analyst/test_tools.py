@@ -8,7 +8,7 @@ from unittest.mock import Mock, patch, MagicMock
 from agentic_scraper.business_analyst.tools import (
     render_page_with_js,
     extract_links,
-    capture_network_calls,
+    capture_network_events,
     http_get_headers,
     http_get_robots,
 )
@@ -17,7 +17,7 @@ from agentic_scraper.business_analyst.tools import (
 class TestRenderPageWithJs:
     """Tests for render_page_with_js tool."""
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_successful_extraction(self, mock_botasaurus_cls):
         """Test successful comprehensive data extraction."""
         # Arrange
@@ -30,7 +30,9 @@ class TestRenderPageWithJs:
             "navigation_links": [
                 {"text": "API Docs", "href": "https://example.com/docs", "className": "nav-link", "source": "nav"}
             ],
-            "network_calls": ["https://api.example.com/v1/data"],
+            "network_events": [
+                {"url": "https://api.example.com/v1/data", "initiator_type": "fetch", "trigger": "page_load"}
+            ],
             "expanded_sections": 5,
             "screenshot": "datasource_analysis/page_screenshot.png",
             "extraction_error": None
@@ -44,7 +46,7 @@ class TestRenderPageWithJs:
         assert result == expected_data
         mock_bot.extract_comprehensive_data.assert_called_once_with("https://example.com")
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_extraction_error(self, mock_botasaurus_cls):
         """Test error handling during extraction."""
         # Arrange
@@ -59,9 +61,9 @@ class TestRenderPageWithJs:
         assert result["extraction_error"] == "Browser crashed"
         assert result["full_text"] == ""
         assert result["navigation_links"] == []
-        assert result["network_calls"] == []
+        assert result["network_events"] == []
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_with_wait_for_selector(self, mock_botasaurus_cls):
         """Test extraction with wait_for selector."""
         # Arrange
@@ -71,7 +73,7 @@ class TestRenderPageWithJs:
             "full_text": "Content",
             "markdown": "# Content",
             "navigation_links": [],
-            "network_calls": [],
+            "network_events": [],
             "expanded_sections": 0,
             "screenshot": None,
             "extraction_error": None
@@ -91,7 +93,7 @@ class TestRenderPageWithJs:
 class TestExtractLinks:
     """Tests for extract_links tool."""
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_successful_link_extraction(self, mock_botasaurus_cls):
         """Test successful link extraction."""
         # Arrange
@@ -106,7 +108,7 @@ class TestExtractLinks:
             "navigation_links": expected_links,
             "full_text": "...",
             "markdown": "...",
-            "network_calls": [],
+            "network_events": [],
             "expanded_sections": 0,
             "screenshot": None,
             "extraction_error": None
@@ -120,7 +122,7 @@ class TestExtractLinks:
         assert len(result) == 2
         assert result[0]["text"] == "API Docs"
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_extraction_error_returns_empty_list(self, mock_botasaurus_cls):
         """Test error handling returns empty list."""
         # Arrange
@@ -135,41 +137,41 @@ class TestExtractLinks:
         assert result == []
 
 
-class TestCaptureNetworkCalls:
-    """Tests for capture_network_calls tool."""
+class TestCaptureNetworkEvents:
+    """Tests for capture_network_events tool."""
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_successful_network_capture(self, mock_botasaurus_cls):
-        """Test successful network call capture."""
+        """Test successful network event capture."""
         # Arrange
         mock_bot = Mock()
         mock_botasaurus_cls.return_value = mock_bot
 
-        expected_calls = [
-            "https://api.example.com/v1/users",
-            "https://api.example.com/v1/data",
-            "https://cdn.example.com/config.json"
+        expected_events = [
+            {"url": "https://api.example.com/v1/users", "initiator_type": "fetch", "trigger": "page_load"},
+            {"url": "https://api.example.com/v1/data", "initiator_type": "xmlhttprequest", "trigger": "page_load"},
+            {"url": "https://cdn.example.com/config.json", "initiator_type": "fetch", "trigger": "page_load"},
         ]
-        mock_bot.extract_network_calls.return_value = expected_calls
+        mock_bot.extract_network_events.return_value = expected_events
 
         # Act
-        result = capture_network_calls.invoke({"url": "https://example.com"})
+        result = capture_network_events.invoke({"url": "https://example.com"})
 
         # Assert
-        assert result == expected_calls
+        assert result == expected_events
         assert len(result) == 3
-        mock_bot.extract_network_calls.assert_called_once_with("https://example.com")
+        mock_bot.extract_network_events.assert_called_once_with("https://example.com")
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_network_capture_error(self, mock_botasaurus_cls):
         """Test error handling returns empty list."""
         # Arrange
         mock_bot = Mock()
         mock_botasaurus_cls.return_value = mock_bot
-        mock_bot.extract_network_calls.side_effect = Exception("CDP disconnected")
+        mock_bot.extract_network_events.side_effect = Exception("CDP disconnected")
 
         # Act
-        result = capture_network_calls.invoke({"url": "https://example.com"})
+        result = capture_network_events.invoke({"url": "https://example.com"})
 
         # Assert
         assert result == []
@@ -178,7 +180,7 @@ class TestCaptureNetworkCalls:
 class TestHttpGetHeaders:
     """Tests for http_get_headers tool."""
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_successful_head_request(self, mock_client_cls):
         """Test successful HEAD request."""
         # Arrange
@@ -200,7 +202,7 @@ class TestHttpGetHeaders:
         assert result["redirected_to"] is None
         assert result["error"] is None
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_redirect_detected(self, mock_client_cls):
         """Test redirect detection."""
         # Arrange
@@ -219,7 +221,7 @@ class TestHttpGetHeaders:
         # Assert
         assert result["redirected_to"] == "https://example.com/login"
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_auth_required_detection(self, mock_client_cls):
         """Test 401 and WWW-Authenticate header detection."""
         # Arrange
@@ -239,7 +241,7 @@ class TestHttpGetHeaders:
         assert result["status_code"] == 401
         assert result["headers"]["www-authenticate"] == "Bearer"
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_network_error(self, mock_client_cls):
         """Test network error handling."""
         # Arrange
@@ -258,7 +260,7 @@ class TestHttpGetHeaders:
 class TestHttpGetRobots:
     """Tests for http_get_robots tool."""
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_successful_robots_fetch(self, mock_client_cls):
         """Test successful robots.txt fetch and parse."""
         # Arrange
@@ -287,7 +289,7 @@ Sitemap: https://example.com/sitemap-news.xml
         assert "https://example.com/sitemap.xml" in result["sitemaps"]
         assert result["error"] is None
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_robots_not_found(self, mock_client_cls):
         """Test robots.txt not found (404)."""
         # Arrange
@@ -306,7 +308,7 @@ Sitemap: https://example.com/sitemap-news.xml
         assert result["content"] == ""
         assert result["disallowed_paths"] == []
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_empty_robots_file(self, mock_client_cls):
         """Test empty robots.txt file."""
         # Arrange
@@ -327,7 +329,7 @@ Sitemap: https://example.com/sitemap-news.xml
         assert result["sitemaps"] == []
         assert result["error"] is None
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_robots_url_construction(self, mock_client_cls):
         """Test robots.txt URL is correctly constructed from any URL."""
         # Arrange
@@ -345,7 +347,7 @@ Sitemap: https://example.com/sitemap-news.xml
         # Assert
         mock_client.get.assert_called_once_with("https://api.example.com/robots.txt")
 
-    @patch("claude_scraper.business_analyst.tools.httpx.Client")
+    @patch("agentic_scraper.business_analyst.tools.httpx.Client")
     def test_network_error(self, mock_client_cls):
         """Test network error handling."""
         # Arrange
@@ -364,7 +366,7 @@ Sitemap: https://example.com/sitemap-news.xml
 class TestToolIntegration:
     """Integration tests for tool interactions."""
 
-    @patch("claude_scraper.business_analyst.tools.BotasaurusTool")
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
     def test_tools_are_langchain_compatible(self, mock_botasaurus_cls):
         """Test that tools work with LangChain's .invoke() method."""
         # Arrange
@@ -374,7 +376,7 @@ class TestToolIntegration:
             "full_text": "Test",
             "markdown": "# Test",
             "navigation_links": [],
-            "network_calls": [],
+            "network_events": [],
             "expanded_sections": 0,
             "screenshot": None,
             "extraction_error": None
@@ -397,8 +399,8 @@ class TestToolIntegration:
         assert extract_links.name == "extract_links"
         assert extract_links.description is not None
 
-        assert capture_network_calls.name == "capture_network_calls"
-        assert capture_network_calls.description is not None
+        assert capture_network_events.name == "capture_network_events"
+        assert capture_network_events.description is not None
 
         assert http_get_headers.name == "http_get_headers"
         assert http_get_headers.description is not None

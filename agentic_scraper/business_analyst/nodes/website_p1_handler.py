@@ -27,6 +27,7 @@ from agentic_scraper.business_analyst.utils.url_decoder import (
     is_download_link
 )
 from agentic_scraper.business_analyst.utils.api_call_extractor import is_file_browser_api
+from agentic_scraper.business_analyst.utils.network_events import urls_from_network_events
 
 logger = logging.getLogger(__name__)
 
@@ -149,11 +150,11 @@ def website_p1_handler(state: BAAnalystState) -> Dict[str, Any]:
 
     artifact = artifacts[last_analyzed_url]
 
-    # Extract file-browser-api URLs from network calls and links
-    network_calls = artifact.network_calls
+    # Extract file-browser-api URLs from network events and links
+    network_call_urls = urls_from_network_events(artifact.network_events)
     navigation_links = [link.url for link in artifact.links]
 
-    browser_api_urls = extract_file_browser_urls(network_calls, navigation_links)
+    browser_api_urls = extract_file_browser_urls(network_call_urls, navigation_links)
 
     logger.info(f"Extracted {len(browser_api_urls)} file-browser-api URLs")
 

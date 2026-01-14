@@ -10,7 +10,7 @@ from typing import Optional
 def phase0_single_page_prompt(
     url: str,
     page_content: str,
-    network_calls: list[str],
+    network_call_urls: list[str],
     navigation_links: list[str],
     primary_api_name: Optional[str] = None
 ) -> str:
@@ -22,14 +22,14 @@ def phase0_single_page_prompt(
     Args:
         url: Target URL being analyzed
         page_content: Full page text content (JavaScript rendered, up to 15k chars)
-        network_calls: List of discovered network call URLs
+        network_call_urls: List of discovered network call URLs
         navigation_links: List of navigation/menu links extracted from page
         primary_api_name: Optional primary API name to focus on (e.g., "pricing-api")
 
     Returns:
         Formatted prompt string for Claude
     """
-    network_calls_text = "\n".join(f"        - {call}" for call in network_calls) if network_calls else "        (none discovered)"
+    network_calls_text = "\n".join(f"        - {call}" for call in network_call_urls) if network_call_urls else "        (none discovered)"
     nav_links_text = "\n".join(f"        - {link}" for link in navigation_links) if navigation_links else "        (none discovered)"
 
     # Build focus instructions if primary_api_name is set
@@ -177,13 +177,13 @@ def phase0_iterative_prompt(
         url = page.get('url', 'unknown')
         markdown_len = len(page.get('markdown', ''))
         nav_links_count = len(page.get('navigation_links', []))
-        network_calls_count = len(page.get('network_calls', []))
+        network_events_count = len(page.get('network_events', []))
 
         pages_summary.append(f"""
 **Page {i}: {url}**
 - Markdown content: {markdown_len} characters
 - Navigation links: {nav_links_count}
-- Network calls: {network_calls_count}
+- Network events: {network_events_count}
 """)
 
     pages_summary_text = "\n".join(pages_summary)
@@ -201,9 +201,10 @@ def phase0_iterative_prompt(
     # Format discovered endpoints so far
     all_endpoints = set()
     for page in all_pages_data:
-        for call in page.get('network_calls', []):
-            if '/api/' in call or call.endswith('.json'):
-                all_endpoints.add(call)
+        for event in page.get('network_events', []):
+            url = event.get('url') if isinstance(event, dict) else None
+            if isinstance(url, str) and ('/api/' in url or url.endswith('.json')):
+                all_endpoints.add(url)
 
     endpoints_text = "\n".join(f"  - {ep}" for ep in list(all_endpoints)[:20])  # Limit to 20
 

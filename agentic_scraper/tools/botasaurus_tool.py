@@ -31,7 +31,7 @@ class BotasaurusTool:
     Example:
         >>> tool = BotasaurusTool()
         >>> html = tool.get_page_content("https://api.example.com/docs")
-        >>> api_calls = tool.extract_network_calls("https://portal.example.com")
+        >>> events = tool.extract_network_events("https://portal.example.com")
     """
 
     def __init__(self) -> None:
@@ -99,16 +99,19 @@ class BotasaurusTool:
                 except Exception as e:
                     logger.warning(f"Failed to close driver: {e}")
 
-    def extract_network_calls(self, url: str) -> list[str]:
-        """Extract network API calls from page load.
+    def extract_network_events(self, url: str) -> list[dict]:
+        """Extract network events from page load.
 
         Args:
             url: URL to navigate to and monitor
 
         Returns:
-            List of API endpoint URLs discovered
+            List of network event dicts with at least:
+            - url: resource URL
+            - initiator_type: Performance API initiatorType (e.g., fetch, xmlhttprequest)
+            - trigger: capture context (currently always "page_load")
         """
-        logger.info(f"Extracting network calls from {url}")
+        logger.info(f"Extracting network events from {url}")
 
         driver = None
         try:
@@ -134,8 +137,9 @@ class BotasaurusTool:
                 }));
             """)
 
-            # Filter for API calls
-            api_calls = []
+            # Filter for likely API/data calls and return event dicts
+            events: list[dict] = []
+            seen_urls = set()
             for log in logs:
                 url_str = log['url']
                 if (
@@ -146,11 +150,19 @@ class BotasaurusTool:
                     ('http' in url_str and
                      not url_str.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf')))
                 ):
-                    if url_str not in api_calls:
-                        api_calls.append(url_str)
+                    if url_str in seen_urls:
+                        continue
+                    seen_urls.add(url_str)
+                    events.append(
+                        {
+                            "url": url_str,
+                            "initiator_type": log.get("type", "unknown"),
+                            "trigger": "page_load",
+                        }
+                    )
 
-            logger.info(f"Extracted {len(api_calls)} network calls")
-            return api_calls
+            logger.info(f"Extracted {len(events)} network events")
+            return events
 
         except Exception as e:
             logger.error(f"Network extraction failed: {e}")
@@ -192,7 +204,7 @@ class BotasaurusTool:
         1. Renders JavaScript-heavy pages fully
         2. Expands ALL collapsible sections (reveals hidden endpoints)
         3. Extracts navigation/menu links
-        4. Monitors network calls
+        4. Captures network events
         5. Gets full page text content
         6. Takes screenshot for visual verification
 
@@ -204,7 +216,7 @@ class BotasaurusTool:
             - full_text: Complete page text content (after expansion)
             - markdown: HTML converted to markdown (preserves structure)
             - navigation_links: All nav/menu links with text and href
-            - network_calls: API URLs discovered during page load
+            - network_events: Captured network events (dicts with at least `url`)
             - expanded_sections: Count of sections expanded
             - screenshot: Path to screenshot file (or None)
             - extraction_error: None if successful, error message if failed (FIX: Issue #2)
@@ -244,9 +256,9 @@ class BotasaurusTool:
             nav_links = self._extract_navigation_links(driver)
             logger.info(f"Found {len(nav_links)} navigation links")
 
-            # Step 3: Extract network calls
-            network_calls = self._extract_network_calls_internal(driver)
-            logger.info(f"Found {len(network_calls)} network calls")
+            # Step 3: Extract network events
+            network_events = self._extract_network_events_internal(driver)
+            logger.info(f"Found {len(network_events)} network events")
 
             # Step 4: Get FULL page text
             full_text = driver.run_js("return document.body.textContent;")
@@ -343,7 +355,7 @@ class BotasaurusTool:
                 "full_text": full_text,
                 "markdown": markdown_content,
                 "navigation_links": nav_links,
-                "network_calls": network_calls,
+                "network_events": network_events,
                 "expanded_sections": expanded_count,
                 "screenshot": screenshot_path,
                 "extraction_error": None,  # FIX: Issue #2 - No error
@@ -369,7 +381,7 @@ class BotasaurusTool:
                 "full_text": "",
                 "markdown": "",
                 "navigation_links": [],
-                "network_calls": [],
+                "network_events": [],
                 "expanded_sections": 0,
                 "screenshot": None,
                 "extraction_error": error_msg  # FIX: Issue #2 - Error indicator for caller
@@ -759,14 +771,14 @@ class BotasaurusTool:
             logger.warning(f"Failed to extract navigation links: {e}")
             return []
 
-    def _extract_network_calls_internal(self, driver: Driver) -> list[str]:
-        """Extract network calls (internal method for use with existing driver).
+    def _extract_network_events_internal(self, driver: Driver) -> list[dict]:
+        """Extract network events (internal method for use with existing driver).
 
         Args:
             driver: Botasaurus Driver instance
 
         Returns:
-            List of API endpoint URLs
+            List of network event dicts with at least {url, initiator_type, trigger}.
         """
         try:
             # Get network logs from Performance API
@@ -778,8 +790,9 @@ class BotasaurusTool:
                 }));
             """)
 
-            # Filter for API calls
-            api_calls = []
+            # Filter for likely API/data calls
+            events: list[dict] = []
+            seen_urls = set()
             for log in logs:
                 url_str = log['url']
                 if (
@@ -790,13 +803,21 @@ class BotasaurusTool:
                     ('http' in url_str and
                      not url_str.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff2', '.woff2', '.ttf')))
                 ):
-                    if url_str not in api_calls:
-                        api_calls.append(url_str)
+                    if url_str in seen_urls:
+                        continue
+                    seen_urls.add(url_str)
+                    events.append(
+                        {
+                            "url": url_str,
+                            "initiator_type": log.get("type", "unknown"),
+                            "trigger": "page_load",
+                        }
+                    )
 
-            return api_calls
+            return events
 
         except Exception as e:
-            logger.warning(f"Failed to extract network calls: {e}")
+            logger.warning(f"Failed to extract network events: {e}")
             return []
 
     def _compress_screenshot(self, screenshot_path: str, max_size_mb: float = 3.5, max_dimension_px: int = 7000) -> bool:

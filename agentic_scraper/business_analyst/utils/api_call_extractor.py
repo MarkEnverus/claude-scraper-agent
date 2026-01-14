@@ -1,4 +1,4 @@
-"""API call extraction from network_calls for BA Analyst.
+"""API call extraction from captured network events for BA Analyst.
 
 This module provides functions to identify likely API endpoints from captured
 network calls (XHR/Fetch). This is critical for APIM-style portals like MISO
@@ -6,7 +6,7 @@ where real API endpoints are only visible in network traffic, not in page links.
 """
 
 import logging
-from typing import List, Set
+from typing import Any, Dict, List, Set
 from urllib.parse import urlparse
 
 logger = logging.getLogger(__name__)
@@ -256,17 +256,17 @@ def is_openapi_spec_url(url: str) -> bool:
     return any(pattern in url_lower for pattern in OPENAPI_SPEC_PATTERNS)
 
 
-def extract_api_calls_from_network(
-    network_calls: List[str],
+def extract_api_calls_from_network_events(
+    network_events: List[Dict[str, Any]],
     seed_url: str = ""
 ) -> List[str]:
-    """Extract likely API endpoints from network_calls.
+    """Extract likely API endpoints from network events.
 
     Filters network calls to identify likely API endpoints worth exploring.
     Excludes static assets, auth endpoints, and other noise.
 
     Args:
-        network_calls: List of URLs captured during page render
+        network_events: List of network events captured during page render (dicts with at least `url`)
         seed_url: Seed URL for domain filtering (optional)
 
     Returns:
@@ -278,13 +278,16 @@ def extract_api_calls_from_network(
         ...     "https://example.com/static/main.css",
         ...     "https://api.example.com/v1/products"
         ... ]
-        >>> extract_api_calls_from_network(calls)
+        >>> extract_api_calls_from_network_events([{"url": c, "initiator_type": "fetch", "trigger": "page_load"} for c in calls])
         ['https://api.example.com/v1/users', 'https://api.example.com/v1/products']
     """
     candidates = []
 
-    for url in network_calls:
-        if not url:
+    for event in network_events:
+        if not isinstance(event, dict):
+            continue
+        url = event.get("url")
+        if not url or not isinstance(url, str):
             continue
 
         # Apply filters
@@ -296,8 +299,8 @@ def extract_api_calls_from_network(
     unique_candidates = list(dict.fromkeys(candidates))
 
     logger.info(
-        f"Extracted {len(unique_candidates)} API calls from {len(network_calls)} network calls "
-        f"({len(network_calls) - len(unique_candidates)} filtered)"
+        f"Extracted {len(unique_candidates)} API calls from {len(network_events)} network events "
+        f"({len(network_events) - len(unique_candidates)} filtered)"
     )
 
     return unique_candidates
@@ -343,7 +346,7 @@ def prioritize_apim_calls(api_calls: List[str]) -> List[str]:
 
 # Export public API
 __all__ = [
-    'extract_api_calls_from_network',
+    'extract_api_calls_from_network_events',
     'prioritize_apim_calls',
     'is_likely_api_call',
     'is_apim_priority',

@@ -130,7 +130,10 @@ class PageArtifact(BaseModel):
     screenshot_path: Optional[str] = Field(None, description="Path to screenshot PNG")
     links: List[LinkInfo] = Field(default_factory=list, description="Discovered links")
     auth_signals: AuthSignals = Field(default_factory=AuthSignals, description="Auth detection")
-    network_calls: List[str] = Field(default_factory=list, description="XHR/Fetch calls captured")
+    network_events: List[Dict[str, Any]] = Field(
+        default_factory=list,
+        description="Captured network events (dicts with at least `url`)",
+    )
 
     # LLM interaction tracking (for capture/replay)
     llm_interactions: List[Dict] = Field(default_factory=list, description="LLM calls made on this page")

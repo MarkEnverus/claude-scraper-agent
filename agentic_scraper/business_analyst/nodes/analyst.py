@@ -26,6 +26,7 @@ from agentic_scraper.business_analyst.utils.chunking import (
     merge_chunks,
     extract_api_keywords
 )
+from agentic_scraper.business_analyst.utils.network_events import urls_from_network_events
 from agentic_scraper.llm.factory import LLMFactory
 from agentic_scraper.types.ba_analysis import (
     Phase0Detection,
@@ -157,13 +158,13 @@ def analyst_node(state: BAAnalystState) -> Dict[str, Any]:
     )
 
     # Build Phase 0 prompt
-    network_calls = artifact.network_calls or []
+    network_call_urls = urls_from_network_events(artifact.network_events)
     navigation_links = [link.url for link in artifact.links] if artifact.links else []
 
     phase0_prompt = phase0_single_page_prompt(
         url=current_url,
         page_content=chunked_markdown,
-        network_calls=network_calls,
+        network_call_urls=network_call_urls,
         navigation_links=navigation_links,
         primary_api_name=state.get('primary_api_name')  # Pass focus control from state
     )
@@ -202,13 +203,13 @@ def analyst_node(state: BAAnalystState) -> Dict[str, Any]:
         # ====================================================================
         if phase0_result.detected_type == DataSourceType.WEBSITE:
             # Check for file-browser/download signals
-            network_calls = artifact.network_calls if artifact else []
+            network_call_urls = urls_from_network_events(artifact.network_events) if artifact else []
             navigation_links = artifact.links if artifact else []
 
             has_file_browser_signals = any(
                 "file-browser" in call.lower() or
                 any(ext in call.lower() for ext in [".csv", ".xlsx", ".zip", ".json", ".xml"])
-                for call in network_calls
+                for call in network_call_urls
             )
 
             has_download_links = any(

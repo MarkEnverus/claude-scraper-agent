@@ -34,6 +34,7 @@ from agentic_scraper.business_analyst.utils.openapi_parser import (
     construct_full_endpoint_urls
 )
 from agentic_scraper.business_analyst.utils.api_call_extractor import is_openapi_spec_url
+from agentic_scraper.business_analyst.utils.network_events import urls_from_network_events
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +97,8 @@ def is_apim_portal(artifact: PageArtifact) -> bool:
         logger.info(f"APIM portal detected via URL pattern: {artifact.url}")
         return True
 
-    # Check network calls for APIM operation patterns
-    for call in artifact.network_calls:
+    # Check network events for APIM operation patterns
+    for call in urls_from_network_events(artifact.network_events):
         call_lower = call.lower()
         if any(pattern in call_lower for pattern in ['/operations', '/schemas', '/hostnames', '/api-definitions']):
             logger.info(f"APIM portal detected via network call: {call}")
@@ -192,8 +193,8 @@ def extract_api_names_from_catalog(artifact: PageArtifact) -> List[str]:
         if api_name:
             api_names.add(api_name)
 
-    # Check network calls
-    for call in artifact.network_calls:
+    # Check network events
+    for call in urls_from_network_events(artifact.network_events):
         api_name = extract_api_name_from_url(call)
         if api_name:
             api_names.add(api_name)
@@ -330,8 +331,8 @@ def extract_endpoints_from_html_docs(artifact: Any) -> List[EndpointFinding]:
         )
         endpoints.append(endpoint)
 
-    # Also check network calls for API-like URLs
-    for url in artifact.network_calls:
+    # Also check network events for API-like URLs
+    for url in urls_from_network_events(artifact.network_events):
         if '/api/' in url or '/v1/' in url or '/v2/' in url:
             # Try to guess method from URL patterns
             method_guess = "GET"  # Default assumption
@@ -532,10 +533,10 @@ def api_p1_handler(state: BAAnalystState) -> Dict[str, Any]:
     # Step 2: Standard OpenAPI/Swagger flow (if APIM didn't find anything)
     if not endpoints:
         navigation_links = [link.url for link in artifact.links]
-        network_calls = artifact.network_calls
+        network_call_urls = urls_from_network_events(artifact.network_events)
         page_text = artifact.markdown_excerpt or artifact.html_excerpt or ""
 
-        spec_urls = find_openapi_spec_urls(navigation_links, network_calls, page_text)
+        spec_urls = find_openapi_spec_urls(navigation_links, network_call_urls, page_text)
 
         logger.info(f"Found {len(spec_urls)} candidate OpenAPI spec URLs")
 

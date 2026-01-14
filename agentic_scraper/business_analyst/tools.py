@@ -59,7 +59,7 @@ def _adapt_portal_schema_to_standard(portal_data: dict, url: str) -> dict:
     """Adapt portal extractor schema to standard BA pipeline schema.
 
     Portal extractor returns: {all_links, navigation_text, data_links, late_api_calls, ...}
-    BA pipeline expects: {markdown, full_text, navigation_links, network_calls, screenshot}
+    BA pipeline expects: {markdown, full_text, navigation_links, network_events, screenshot}
 
     Args:
         portal_data: Output from extract_comprehensive_website_data()
@@ -90,18 +90,41 @@ def _adapt_portal_schema_to_standard(portal_data: dict, url: str) -> dict:
     full_text = combined_text
     markdown = combined_text  # Portal extractor doesn't produce markdown, use text as-is
 
-    # Union all network call sources: late_api_calls + cdp_data_urls + URL-like data_links
-    network_calls = []
-    network_calls.extend(portal_data.get('late_api_calls', []))
-    network_calls.extend(portal_data.get('cdp_data_urls', []))
+    # Build network events from available sources
+    network_events = []
+
+    def add_event(event_url: str, trigger: str, initiator_type: str = "unknown") -> None:
+        if not event_url:
+            return
+        network_events.append(
+            {"url": event_url, "initiator_type": initiator_type, "trigger": trigger}
+        )
+
+    for call_url in portal_data.get("late_api_calls", []):
+        if isinstance(call_url, str):
+            add_event(call_url, trigger="late_api_calls")
+
+    for call_url in portal_data.get("cdp_data_urls", []):
+        if isinstance(call_url, str):
+            add_event(call_url, trigger="cdp_data_urls")
 
     # Add data_links that look like URLs (not local file paths)
-    for data_link in portal_data.get('data_links', []):
-        if isinstance(data_link, str) and (data_link.startswith('http://') or data_link.startswith('https://')):
-            network_calls.append(data_link)
+    for data_link in portal_data.get("data_links", []):
+        if isinstance(data_link, str) and (
+            data_link.startswith("http://") or data_link.startswith("https://")
+        ):
+            add_event(data_link, trigger="data_links")
 
-    # Deduplicate network calls
-    network_calls = list(dict.fromkeys(network_calls))
+    # Deduplicate by URL (keep first occurrence)
+    deduped = []
+    seen_urls = set()
+    for ev in network_events:
+        ev_url = ev.get("url")
+        if not ev_url or ev_url in seen_urls:
+            continue
+        seen_urls.add(ev_url)
+        deduped.append(ev)
+    network_events = deduped
 
     # Screenshot: portal extractor doesn't capture screenshots
     screenshot = portal_data.get('screenshot', None)
@@ -109,7 +132,7 @@ def _adapt_portal_schema_to_standard(portal_data: dict, url: str) -> dict:
     logger.info(
         f"Adapted portal schema for {url}: "
         f"{len(navigation_links)} links, "
-        f"{len(network_calls)} network calls, "
+        f"{len(network_events)} network events, "
         f"{len(full_text)} chars text"
     )
 
@@ -117,7 +140,7 @@ def _adapt_portal_schema_to_standard(portal_data: dict, url: str) -> dict:
         'full_text': full_text,
         'markdown': markdown,
         'navigation_links': navigation_links,
-        'network_calls': network_calls,
+        'network_events': network_events,
         'expanded_sections': 0,  # Portal extractor doesn't track expansions
         'screenshot': screenshot,
         'extraction_error': None
@@ -154,7 +177,7 @@ def render_page_with_js(url: str, wait_for: Optional[str] = None) -> dict:
         - full_text: Complete page text content
         - markdown: HTML converted to markdown
         - navigation_links: List of {'text', 'href', 'className', 'source'}
-        - network_calls: List of API URLs discovered
+        - network_events: List of captured network events (dicts with at least `url`)
         - expanded_sections: Count of sections expanded
         - screenshot: Path to screenshot file (or None)
         - extraction_error: None if successful, error message otherwise
@@ -189,7 +212,7 @@ def render_page_with_js(url: str, wait_for: Optional[str] = None) -> dict:
             "full_text": "",
             "markdown": "",
             "navigation_links": [],
-            "network_calls": [],
+            "network_events": [],
             "expanded_sections": 0,
             "screenshot": None,
             "extraction_error": str(e)
@@ -264,8 +287,8 @@ def extract_links(url: str) -> list[dict]:
 
 
 @tool
-def capture_network_calls(url: str) -> list[str]:
-    """Capture XHR/Fetch network calls made during page load.
+def capture_network_events(url: str) -> list[dict]:
+    """Capture XHR/Fetch network events made during page load.
 
     This tool monitors network traffic to discover:
     - Hidden API endpoints
@@ -282,21 +305,21 @@ def capture_network_calls(url: str) -> list[str]:
         url: URL to monitor network calls for
 
     Returns:
-        List of API endpoint URLs discovered during page load
+        List of network events (dicts with at least `url`)
 
     Example:
-        >>> calls = capture_network_calls("https://portal.example.com")
-        >>> api_calls = [c for c in calls if '/api/' in c]
-        >>> print(f"Found {len(api_calls)} API calls")
+        >>> events = capture_network_events("https://portal.example.com")
+        >>> api_urls = [e["url"] for e in events if '/api/' in e["url"]]
+        >>> print(f"Found {len(api_urls)} API calls")
     """
-    logger.info(f"Tool: capture_network_calls({url})")
+    logger.info(f"Tool: capture_network_events({url})")
     try:
         bot = BotasaurusTool()
-        network_calls = bot.extract_network_calls(url)
-        logger.info(f"Captured {len(network_calls)} network calls from {url}")
-        return network_calls
+        events = bot.extract_network_events(url)
+        logger.info(f"Captured {len(events)} network events from {url}")
+        return events
     except Exception as e:
-        logger.error(f"Failed to capture network calls: {e}", exc_info=True)
+        logger.error(f"Failed to capture network events: {e}", exc_info=True)
         return []
 
 
@@ -446,7 +469,7 @@ def http_get_robots(url: str) -> dict:
 __all__ = [
     "render_page_with_js",
     "extract_links",
-    "capture_network_calls",
+    "capture_network_events",
     "http_get_headers",
     "http_get_robots",
 ]

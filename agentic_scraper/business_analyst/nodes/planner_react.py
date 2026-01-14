@@ -32,7 +32,7 @@ from agentic_scraper.business_analyst.utils.link_scoring import (
     score_link_deterministic,
 )
 from agentic_scraper.business_analyst.utils.api_call_extractor import (
-    extract_api_calls_from_network,
+    extract_api_calls_from_network_events,
     prioritize_apim_calls,
 )
 
@@ -427,7 +427,7 @@ def extract_artifacts_from_messages(messages: list, state: BAAnalystState) -> Di
                     screenshot_path=content.get('screenshot'),
                     links=[],  # Will be populated from navigation_links
                     auth_signals=AuthSignals(),  # Will be analyzed later
-                    network_calls=content.get('network_calls', [])
+                    network_events=content.get('network_events', [])
                 )
 
                 # Convert navigation_links to LinkInfo with scoring
@@ -462,9 +462,10 @@ def extract_artifacts_from_messages(messages: list, state: BAAnalystState) -> Di
 
                 logger.info(f"Link scoring complete: {len(artifact.links)} scored, {junk_filtered} junk filtered")
 
-                # Extract API calls from network_calls
-                if artifact.network_calls:
-                    api_calls = extract_api_calls_from_network(artifact.network_calls, seed_url)
+                api_calls = []
+                # Extract API call URLs from network events
+                if artifact.network_events:
+                    api_calls = extract_api_calls_from_network_events(artifact.network_events, seed_url)
                     if api_calls:
                         # Prioritize APIM calls (MISO, etc.)
                         api_calls = prioritize_apim_calls(api_calls)
@@ -477,7 +478,10 @@ def extract_artifacts_from_messages(messages: list, state: BAAnalystState) -> Di
                 if content.get('screenshot'):
                     screenshots[url] = content['screenshot']
 
-                logger.info(f"Created artifact for {url}: {len(artifact.links)} links, {len(api_calls) if artifact.network_calls else 0} API calls, screenshot={bool(artifact.screenshot_path)}")
+                logger.info(
+                    f"Created artifact for {url}: {len(artifact.links)} links, "
+                    f"{len(api_calls)} API calls, screenshot={bool(artifact.screenshot_path)}"
+                )
 
             # Handle http_get_headers results
             elif tool_name == 'http_get_headers' and isinstance(content, dict):
@@ -499,7 +503,7 @@ def extract_artifacts_from_messages(messages: list, state: BAAnalystState) -> Di
                         has_403=(content.get('status_code') == 403),
                         requires_auth_header='www-authenticate' in content.get('headers', {})
                     ),
-                    network_calls=[]
+                    network_events=[]
                 )
 
                 artifacts[url] = artifact
