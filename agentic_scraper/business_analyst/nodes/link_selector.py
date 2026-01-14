@@ -207,17 +207,10 @@ def link_selector_node(state: BAAnalystState) -> Dict:
 
     # Create LLM for structured reranking (using LangChain)
     try:
-        from agentic_scraper.business_analyst.llm_factory import create_chatbedrock_with_reasoning
+        from agentic_scraper.llm.factory import LLMFactory
 
-        if config:
-            llm = create_chatbedrock_with_reasoning(config)
-        else:
-            from langchain_aws import ChatBedrockConverse
-            llm = ChatBedrockConverse(
-                model="us.anthropic.claude-3-5-haiku-20241022-v1:0",
-                temperature=1.0,
-                region="us-east-1"
-            )
+        factory = LLMFactory(config=config)
+        llm = factory.create_fast_model()  # Use fast model for link reranking
 
         # Generate reranking prompt
         prompt = link_reranking_prompt(
@@ -439,17 +432,10 @@ def filter_links_for_tool(
 
     # Pass 2: LLM reranking (using LangChain)
     try:
-        from agentic_scraper.business_analyst.llm_factory import create_chatbedrock_with_reasoning
+        from agentic_scraper.llm.factory import LLMFactory
 
-        if config:
-            llm = create_chatbedrock_with_reasoning(config)
-        else:
-            from langchain_aws import ChatBedrockConverse
-            llm = ChatBedrockConverse(
-                model="us.anthropic.claude-3-5-haiku-20241022-v1:0",
-                temperature=1.0,
-                region="us-east-1"
-            )
+        factory = LLMFactory(config=config)
+        llm = factory.create_fast_model()  # Use fast model for link reranking
 
         # Use with_structured_output
         structured_llm = llm.with_structured_output(LinkRerankResult)

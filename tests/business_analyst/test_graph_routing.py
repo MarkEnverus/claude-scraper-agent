@@ -11,14 +11,14 @@ from agentic_scraper.types.ba_analysis import DataSourceType
 
 
 def test_routing_with_feature_flag_disabled():
-    """Test that routing returns planner_react when feature flag is disabled."""
+    """Test that routing works with default config."""
     from agentic_scraper.business_analyst.graph import create_ba_graph
 
     # Create graph to access routing function
     app = create_ba_graph()
 
-    # Create state with feature flag OFF
-    config = BAConfig(enable_p1_p2_routing=False)
+    # Create state with default config (P1/P2 routing is now always enabled)
+    config = BAConfig()
     state: BAAnalystState = {
         "seed_url": "https://example.com",
         "primary_api_name": None,
@@ -60,7 +60,7 @@ def test_routing_with_website_type_high_confidence():
     """Test that WEBSITE type with high confidence routes to website_p1."""
     from agentic_scraper.business_analyst.graph import create_ba_graph
 
-    config = BAConfig(enable_p1_p2_routing=True)
+    config = BAConfig()
     app = create_ba_graph()
 
     # Create state with WEBSITE type and high confidence
@@ -103,7 +103,7 @@ def test_routing_with_api_type_high_confidence():
     """Test that API type with high confidence routes to api_p1."""
     from agentic_scraper.business_analyst.graph import create_ba_graph
 
-    config = BAConfig(enable_p1_p2_routing=True)
+    config = BAConfig()
     app = create_ba_graph()
 
     # Create state with API type and high confidence
@@ -146,7 +146,7 @@ def test_routing_with_low_confidence():
     """Test that low confidence (<0.7) routes to planner_react regardless of type."""
     from agentic_scraper.business_analyst.graph import create_ba_graph
 
-    config = BAConfig(enable_p1_p2_routing=True)
+    config = BAConfig()
     app = create_ba_graph()
 
     # Create state with low confidence
@@ -189,7 +189,7 @@ def test_routing_with_ftp_type():
     """Test that FTP type routes to planner_react (not yet implemented)."""
     from agentic_scraper.business_analyst.graph import create_ba_graph
 
-    config = BAConfig(enable_p1_p2_routing=True)
+    config = BAConfig()
     app = create_ba_graph()
 
     # Create state with FTP type (not yet implemented)

@@ -4,11 +4,18 @@ This document proposes **concrete enhancements** to the local Business Analyst (
 
 It is written to be **agent-readable**: each enhancement includes (1) what exists today (with source pointers), (2) what to build, (3) where to implement, and (4) acceptance criteria.
 
-## Work-In-Progress Notice (Unapproved Local Changes)
+## Work Status: COMPLETED
 
-This workspace currently contains **unapproved, incomplete refactor work** that was started while exploring the “break compatibility” path you requested later.
+All E1-E5 enhancements have been implemented. The `network_calls` → `network_events` refactor is complete.
 
-If you are a follow-on agent, treat the section below as a **handoff + stop point** (what changed, what’s broken, what’s still required).
+**Implementation Summary**:
+- E1 (interact_and_capture tool): ✅ Complete
+- E2 (network_events structure): ✅ Complete
+- E3 (parameter propagation): ✅ Complete
+- E4 (API_DOCUMENTATION.md output): ✅ Complete
+- E5 (robots.txt enforcement): ✅ Complete
+
+Only remaining: APIM adapter refactoring (P2, optional).
 
 ### Why “Backwards Compatible” Was Mentioned Earlier
 
@@ -294,9 +301,20 @@ Grounded view from this repo:
 
 ## Implementation Checklist (For Another Agent)
 
-- [ ] E1: Add `interact_and_capture` tool; wire into `planner_react` artifact ingestion.
-- [ ] E2: Add `network_events` to `PageArtifact`; capture method/status/content-type where possible.
-- [ ] E3: Map `EndpointFinding.parameters` → `EndpointDetails.parameters` in `convert_endpoint_finding_to_details`.
-- [ ] E4: Add `write_api_documentation_md` output (derived from existing artifacts; no hallucination).
-- [ ] E5: Enforce `respect_robots` using `http_get_robots` during planning and link enqueueing.
+- [x] E1: Add `interact_and_capture` tool; wire into `planner_react` artifact ingestion.
+  - Tool: `agentic_scraper/business_analyst/tools.py:469-532`
+  - Botasaurus primitive: `agentic_scraper/tools/botasaurus_tool.py:398-620+`
+  - Tests: `tests/business_analyst/test_tools.py:181-288`
+- [x] E2: Add `network_events` to `PageArtifact`; capture method/status/content-type where possible.
+  - State model: `agentic_scraper/business_analyst/state.py:133-136`
+  - Network extraction: `agentic_scraper/tools/botasaurus_tool.py:102-176`
+  - Helper utility: `agentic_scraper/business_analyst/utils/network_events.py`
+- [x] E3: Map `EndpointFinding.parameters` → `EndpointDetails.parameters` in `convert_endpoint_finding_to_details`.
+  - Implementation: `agentic_scraper/business_analyst/nodes/summarizer.py:456-494`
+- [x] E4: Add `write_api_documentation_md` output (derived from existing artifacts; no hallucination).
+  - Implementation: `agentic_scraper/business_analyst/nodes/summarizer.py:780-912`
+  - Called from: `agentic_scraper/business_analyst/nodes/summarizer.py:1003`
+- [x] E5: Enforce `respect_robots` using `http_get_robots` during planning and link enqueueing.
+  - Helper functions: `agentic_scraper/business_analyst/nodes/planner_react.py:121-171`
+  - Integration: `agentic_scraper/business_analyst/nodes/planner_react.py:830-842`
 - [ ] APIM: Refactor portal detection into adapters; keep APIM as one adapter with OpenAPI-first strategy.

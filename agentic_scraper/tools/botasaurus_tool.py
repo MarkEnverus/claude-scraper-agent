@@ -394,6 +394,241 @@ class BotasaurusTool:
                 except Exception as e:
                     logger.warning(f"Failed to close driver: {e}")
 
+    @profile_time("Botasaurus: Interact and capture")
+    def interact_and_capture(self, url: str, actions: list[dict]) -> dict:
+        """Execute UI interactions and capture resulting network events (E1).
+
+        Performs deterministic UI actions (click, type, select, scroll) while
+        monitoring network traffic. This enables discovery of endpoints triggered
+        by user interactions (filters, pagination, exports, etc.).
+
+        Supported action types:
+        - click: Click element by CSS selector or text content
+        - type: Type text into an input field
+        - select: Select option from dropdown
+        - scroll: Scroll to element or by offset
+        - wait: Wait for specified milliseconds
+
+        Args:
+            url: URL to navigate to before executing actions
+            actions: List of action dicts, each with:
+                - action: "click" | "type" | "select" | "scroll" | "wait"
+                - selector: CSS selector (optional for text-based click)
+                - text: Text to type or text content to click on
+                - value: Value to select or scroll offset
+                - wait_after: Milliseconds to wait after action (default: 500)
+
+        Returns:
+            Dictionary containing:
+            - network_events: List of network events captured during interactions
+            - actions_executed: Count of successfully executed actions
+            - errors: List of action errors (non-fatal)
+            - markdown: Page markdown content after interactions
+
+        Example:
+            >>> tool = BotasaurusTool()
+            >>> result = tool.interact_and_capture(
+            ...     "https://portal.example.com/data",
+            ...     [
+            ...         {"action": "click", "selector": "#search-btn"},
+            ...         {"action": "type", "selector": "#date-input", "text": "2024-01-15"},
+            ...         {"action": "click", "selector": ".submit-btn"},
+            ...         {"action": "wait", "value": 2000}
+            ...     ]
+            ... )
+            >>> print(f"Captured {len(result['network_events'])} new API calls")
+        """
+        logger.info(f"Interact and capture: {url} with {len(actions)} actions")
+
+        driver = None
+        captured_events: list[dict] = []
+        actions_executed = 0
+        errors: list[str] = []
+
+        try:
+            # Create Driver instance
+            driver = Driver(
+                headless=True,
+                block_images=True,
+                wait_for_complete_page_load=True
+            )
+
+            # Navigate to page
+            driver.get(url)
+            logger.debug(f"Page loaded: {driver.current_url}")
+
+            # Wait for initial load
+            driver.sleep(3)
+
+            # Capture baseline network events
+            baseline_urls = set()
+            try:
+                baseline_logs = driver.run_js("""
+                    const entries = performance.getEntriesByType('resource');
+                    return entries.map(e => e.name);
+                """)
+                baseline_urls = set(baseline_logs)
+                logger.debug(f"Baseline: {len(baseline_urls)} network requests")
+            except Exception as e:
+                logger.warning(f"Could not capture baseline: {e}")
+
+            # Execute each action
+            for i, action_def in enumerate(actions):
+                action_type = action_def.get('action', 'unknown')
+                selector = action_def.get('selector', '')
+                text = action_def.get('text', '')
+                value = action_def.get('value', '')
+                wait_after = action_def.get('wait_after', 500)
+
+                logger.debug(f"Action {i+1}: {action_type} selector={selector} text={text[:20] if text else ''}")
+
+                try:
+                    if action_type == 'click':
+                        if selector:
+                            # Click by CSS selector
+                            driver.run_js(f"""
+                                const el = document.querySelector('{selector}');
+                                if (el) {{ el.click(); return true; }}
+                                return false;
+                            """)
+                        elif text:
+                            # Click by text content
+                            escaped_text = text.replace("'", "\\'")
+                            driver.run_js(f"""
+                                const elements = Array.from(document.querySelectorAll('button, a, [role="button"], input[type="submit"]'));
+                                const target = elements.find(el => el.textContent.includes('{escaped_text}'));
+                                if (target) {{ target.click(); return true; }}
+                                return false;
+                            """)
+                        actions_executed += 1
+
+                    elif action_type == 'type':
+                        if selector and text:
+                            escaped_text = text.replace("'", "\\'")
+                            driver.run_js(f"""
+                                const el = document.querySelector('{selector}');
+                                if (el) {{
+                                    el.focus();
+                                    el.value = '{escaped_text}';
+                                    el.dispatchEvent(new Event('input', {{ bubbles: true }}));
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    return true;
+                                }}
+                                return false;
+                            """)
+                            actions_executed += 1
+
+                    elif action_type == 'select':
+                        if selector and value:
+                            escaped_value = value.replace("'", "\\'")
+                            driver.run_js(f"""
+                                const el = document.querySelector('{selector}');
+                                if (el) {{
+                                    el.value = '{escaped_value}';
+                                    el.dispatchEvent(new Event('change', {{ bubbles: true }}));
+                                    return true;
+                                }}
+                                return false;
+                            """)
+                            actions_executed += 1
+
+                    elif action_type == 'scroll':
+                        if selector:
+                            driver.run_js(f"""
+                                const el = document.querySelector('{selector}');
+                                if (el) {{ el.scrollIntoView({{ behavior: 'smooth' }}); return true; }}
+                                return false;
+                            """)
+                        elif value:
+                            driver.run_js(f"window.scrollBy(0, {value});")
+                        actions_executed += 1
+
+                    elif action_type == 'wait':
+                        wait_ms = int(value) if value else 1000
+                        driver.sleep(wait_ms / 1000)
+                        actions_executed += 1
+
+                    # Wait after action for network requests to complete
+                    if wait_after > 0:
+                        driver.sleep(wait_after / 1000)
+
+                except Exception as e:
+                    error_msg = f"Action {i+1} ({action_type}) failed: {e}"
+                    logger.warning(error_msg)
+                    errors.append(error_msg)
+
+            # Capture new network events after interactions
+            try:
+                current_logs = driver.run_js("""
+                    const entries = performance.getEntriesByType('resource');
+                    return entries.map(e => ({
+                        url: e.name,
+                        type: e.initiatorType
+                    }));
+                """)
+
+                seen_urls = set()
+                for log in current_logs:
+                    url_str = log['url']
+                    if url_str in baseline_urls or url_str in seen_urls:
+                        continue  # Skip baseline and duplicates
+
+                    # Filter for likely API/data calls
+                    if (
+                        '/api/' in url_str or
+                        url_str.endswith('.json') or
+                        url_str.endswith('.xml') or
+                        (log['type'] in ['fetch', 'xmlhttprequest']) or
+                        ('http' in url_str and
+                         not url_str.endswith(('.css', '.js', '.png', '.jpg', '.jpeg', '.gif', '.svg', '.ico', '.woff', '.woff2', '.ttf')))
+                    ):
+                        seen_urls.add(url_str)
+                        captured_events.append({
+                            "url": url_str,
+                            "initiator_type": log.get("type", "unknown"),
+                            "trigger": "interaction_script",
+                        })
+
+                logger.info(f"Captured {len(captured_events)} new network events after interactions")
+
+            except Exception as e:
+                logger.warning(f"Could not capture network events: {e}")
+
+            # Get page content after interactions
+            markdown_content = ""
+            try:
+                html = driver.run_js("return document.documentElement.outerHTML;")
+                markdown_content = md(
+                    html,
+                    heading_style="ATX",
+                    bullets="-",
+                    strip=['script', 'style', 'meta', 'link']
+                )
+            except Exception as e:
+                logger.warning(f"Could not extract markdown: {e}")
+
+            return {
+                "network_events": captured_events,
+                "actions_executed": actions_executed,
+                "errors": errors,
+                "markdown": markdown_content[:50000] if markdown_content else "",  # Cap at 50K
+            }
+
+        except Exception as e:
+            logger.error(f"Interact and capture failed: {e}", exc_info=True)
+            return {
+                "network_events": [],
+                "actions_executed": 0,
+                "errors": [str(e)],
+                "markdown": "",
+            }
+        finally:
+            if driver:
+                try:
+                    driver.close()
+                except Exception as e:
+                    logger.warning(f"Failed to close driver: {e}")
+
     def _text_matches_operation(self, op_name: str, elem_text: str) -> bool:
         """Check if element text matches operation name (flexible matching).
 

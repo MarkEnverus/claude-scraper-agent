@@ -34,6 +34,7 @@ from agentic_scraper.types.ba_analysis import (
     ConfidenceLevel,
     AuthenticationMethod,
     DataSourceType,
+    Parameter,
 )
 
 logger = logging.getLogger(__name__)
@@ -452,6 +453,30 @@ def convert_endpoint_finding_to_details(
     # Generate endpoint_id (kebab-case from name)
     endpoint_id = finding.name.lower().replace(' ', '-').replace('_', '-')
 
+    # Convert EndpointFinding.parameters (List[Dict]) to EndpointDetails.parameters (dict[str, Parameter])
+    # E3: Preserve Phase 1.5 parameter enrichment in generator inputs
+    converted_parameters: dict[str, Parameter] = {}
+    for param_dict in finding.parameters:
+        param_name = param_dict.get("name", "")
+        if not param_name:
+            continue  # Skip parameters without names
+
+        # Build Parameter model from dict, with safe defaults
+        converted_parameters[param_name] = Parameter(
+            name=param_name,
+            type=param_dict.get("type", "string"),
+            required=param_dict.get("required", False),
+            description=param_dict.get("description", ""),
+            location=param_dict.get("location"),
+            format=param_dict.get("format"),
+            example=param_dict.get("example"),
+            default=param_dict.get("default"),
+            enum=param_dict.get("enum"),
+            minimum=param_dict.get("minimum"),
+            maximum=param_dict.get("maximum"),
+            pattern=param_dict.get("pattern"),
+        )
+
     return EndpointDetails(
         endpoint_id=endpoint_id,
         name=finding.name,
@@ -459,7 +484,7 @@ def convert_endpoint_finding_to_details(
         base_url=endpoint_base_url,
         path=endpoint_path,
         method=method,
-        parameters={},  # Empty - can be inferred later by generator
+        parameters=converted_parameters,
         authentication=authentication,
         response_format=response_format,
         validation_status=ValidationStatus.NOT_TESTED,
@@ -752,6 +777,141 @@ This analysis identified **{filtering_summary['kept_for_generation']} data-relev
     logger.info(f"Wrote executive data summary: {output_path}")
 
 
+def write_api_documentation_md(
+    filtering_result: FilteringResult,
+    state: BAAnalystState,
+    output_dir: Path
+) -> None:
+    """Write API_DOCUMENTATION.md - technical API reference (E4).
+
+    Generates a clean API reference document similar to the /discover-api plugin
+    deliverables, derived entirely from discovered endpoints and parameters.
+
+    Args:
+        filtering_result: Result from hybrid filtering pipeline
+        state: Full BA analyst state
+        output_dir: Directory to write output file
+
+    Output File: API_DOCUMENTATION.md (API reference)
+    """
+    seed_url = state.get('seed_url', '')
+    hostname = get_hostname(seed_url)
+    auth_metadata = filtering_result.auth_metadata
+    kept_endpoints = filtering_result.kept_endpoints
+
+    # Build markdown
+    md = f"""# {hostname} - API Documentation
+
+**Generated**: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Base URL**: {seed_url}
+
+---
+
+## Authentication
+
+"""
+    auth_notes = auth_metadata.get('auth_notes', 'Unknown')
+    auth_method = auth_metadata.get('method', 'unknown')
+    auth_required = auth_metadata.get('auth_required', False)
+
+    if auth_required:
+        md += f"**Required**: Yes\n"
+        md += f"**Method**: {auth_method}\n\n"
+        md += f"**Notes**: {auth_notes}\n\n"
+    else:
+        md += f"**Required**: No (public access)\n\n"
+        md += f"**Notes**: {auth_notes}\n\n"
+
+    md += "---\n\n"
+    md += "## Endpoints\n\n"
+
+    if not kept_endpoints:
+        md += "*No data endpoints discovered. See endpoint_inventory.json for full audit.*\n\n"
+    else:
+        for i, ep in enumerate(kept_endpoints, 1):
+            md += f"### {i}. {ep.name}\n\n"
+            md += f"**URL**: `{ep.url}`\n\n"
+            md += f"**Method**: `{ep.method_guess.upper()}`\n\n"
+            md += f"**Response Format**: `{ep.format}`\n\n"
+
+            # Parameters (from E3 - now preserved in EndpointFinding.parameters)
+            if ep.parameters:
+                md += "**Parameters**:\n\n"
+                md += "| Name | Type | Required | Location | Description |\n"
+                md += "|------|------|----------|----------|-------------|\n"
+                for param in ep.parameters:
+                    name = param.get('name', 'unknown')
+                    ptype = param.get('type', 'string')
+                    required = '✓' if param.get('required', False) else ''
+                    location = param.get('location', 'query')
+                    description = param.get('description', '')[:50]  # Truncate long descriptions
+                    md += f"| `{name}` | {ptype} | {required} | {location} | {description} |\n"
+                md += "\n"
+
+                # Show example values if available
+                examples = [(p.get('name'), p.get('example')) for p in ep.parameters if p.get('example')]
+                if examples:
+                    md += "**Example Values**:\n"
+                    for name, example in examples:
+                        md += f"- `{name}`: `{example}`\n"
+                    md += "\n"
+
+            # Pagination info
+            if ep.pagination and ep.pagination.lower() not in ('unknown', 'false'):
+                md += f"**Pagination**: Yes\n\n"
+            elif ep.pagination and ep.pagination.lower() == 'false':
+                md += f"**Pagination**: No\n\n"
+
+            # Data type
+            if ep.data_type and ep.data_type != 'other':
+                md += f"**Data Type**: {ep.data_type}\n\n"
+
+            # Notes
+            if ep.notes:
+                md += f"**Notes**: {ep.notes}\n\n"
+
+            md += "---\n\n"
+
+    # Rate limits section (placeholder - captured in notes if discovered)
+    md += "## Rate Limits\n\n"
+    rate_limit_notes = [ep.notes for ep in kept_endpoints if 'rate' in ep.notes.lower()]
+    if rate_limit_notes:
+        for note in rate_limit_notes:
+            md += f"- {note}\n"
+        md += "\n"
+    else:
+        md += "*No rate limit information discovered.*\n\n"
+
+    md += "---\n\n"
+
+    # Data links section (for WEBSITE sources with direct downloads)
+    discovered_data_links = state.get('discovered_data_links', [])
+    if discovered_data_links:
+        md += "## Direct Download Links\n\n"
+        md += "The following direct download URLs were discovered:\n\n"
+        for link in discovered_data_links[:20]:  # Cap at 20
+            md += f"- `{link}`\n"
+        if len(discovered_data_links) > 20:
+            md += f"\n*...and {len(discovered_data_links) - 20} more (see endpoint_inventory.json)*\n"
+        md += "\n---\n\n"
+
+    # Footer
+    md += "## Usage Notes\n\n"
+    md += "- This documentation is auto-generated from BA discovery analysis\n"
+    md += "- Endpoints marked with 'unknown' values require manual verification\n"
+    md += "- Parameter lists may be incomplete - check API source for authoritative docs\n"
+    md += "- For full audit trail, see `endpoint_inventory.json`\n\n"
+    md += "---\n\n"
+    md += "*Generated by BA Analyst - E4: API Documentation Output*\n"
+
+    # Write to file
+    output_path = output_dir / 'API_DOCUMENTATION.md'
+    with open(output_path, 'w', encoding='utf-8') as f:
+        f.write(md)
+
+    logger.info(f"Wrote API documentation: {output_path}")
+
+
 # ============================================================================
 # Main Summarizer Node
 # ============================================================================
@@ -840,6 +1000,7 @@ def summarizer_node(state: BAAnalystState) -> Dict:
     write_validated_spec(filtering_result, state, output_dir)
     write_endpoint_inventory(filtering_result, output_dir)
     write_executive_data_summary(filtering_result, state, output_dir)
+    write_api_documentation_md(filtering_result, state, output_dir)
 
     logger.info("=" * 80)
     logger.info("ENDPOINT FILTERING COMPLETE")

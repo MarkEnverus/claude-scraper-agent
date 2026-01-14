@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Type, Any
 from pydantic import BaseModel, Field
 
-from agentic_scraper.llm.base import LLMProvider
+from agentic_scraper.llm.factory import LLMFactory
 from agentic_scraper.types import (
     Phase0Detection,
     Phase1Documentation,

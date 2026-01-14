@@ -9,6 +9,7 @@ from agentic_scraper.business_analyst.tools import (
     render_page_with_js,
     extract_links,
     capture_network_events,
+    interact_and_capture,
     http_get_headers,
     http_get_robots,
 )
@@ -175,6 +176,116 @@ class TestCaptureNetworkEvents:
 
         # Assert
         assert result == []
+
+
+class TestInteractAndCapture:
+    """Tests for interact_and_capture tool (E1)."""
+
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
+    def test_successful_interaction(self, mock_botasaurus_cls):
+        """Test successful UI interaction and network capture."""
+        # Arrange
+        mock_bot = Mock()
+        mock_botasaurus_cls.return_value = mock_bot
+
+        expected_result = {
+            "network_events": [
+                {"url": "https://api.example.com/search?q=test", "initiator_type": "fetch", "trigger": "interaction_script"}
+            ],
+            "actions_executed": 2,
+            "errors": [],
+            "markdown": "# Search Results"
+        }
+        mock_bot.interact_and_capture.return_value = expected_result
+
+        # Act
+        result = interact_and_capture.invoke({
+            "url": "https://example.com",
+            "actions": [
+                {"action": "type", "selector": "#search-input", "text": "test"},
+                {"action": "click", "selector": "#search-btn"}
+            ]
+        })
+
+        # Assert
+        assert result == expected_result
+        assert result["actions_executed"] == 2
+        assert len(result["network_events"]) == 1
+        assert result["network_events"][0]["trigger"] == "interaction_script"
+
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
+    def test_interaction_with_errors(self, mock_botasaurus_cls):
+        """Test interaction that partially fails."""
+        # Arrange
+        mock_bot = Mock()
+        mock_botasaurus_cls.return_value = mock_bot
+
+        expected_result = {
+            "network_events": [],
+            "actions_executed": 1,
+            "errors": ["Action 2 (click) failed: Element not found"],
+            "markdown": "# Page Content"
+        }
+        mock_bot.interact_and_capture.return_value = expected_result
+
+        # Act
+        result = interact_and_capture.invoke({
+            "url": "https://example.com",
+            "actions": [
+                {"action": "type", "selector": "#search", "text": "test"},
+                {"action": "click", "selector": "#nonexistent"}
+            ]
+        })
+
+        # Assert
+        assert result["actions_executed"] == 1
+        assert len(result["errors"]) == 1
+        assert "Element not found" in result["errors"][0]
+
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
+    def test_interaction_error_returns_safe_default(self, mock_botasaurus_cls):
+        """Test that errors return safe default structure."""
+        # Arrange
+        mock_bot = Mock()
+        mock_botasaurus_cls.return_value = mock_bot
+        mock_bot.interact_and_capture.side_effect = RuntimeError("Browser crashed")
+
+        # Act
+        result = interact_and_capture.invoke({
+            "url": "https://example.com",
+            "actions": [{"action": "click", "selector": "#btn"}]
+        })
+
+        # Assert
+        assert result["network_events"] == []
+        assert result["actions_executed"] == 0
+        assert "Browser crashed" in result["errors"][0]
+        assert result["markdown"] == ""
+
+    @patch("agentic_scraper.business_analyst.tools.BotasaurusTool")
+    def test_wait_action(self, mock_botasaurus_cls):
+        """Test wait action."""
+        # Arrange
+        mock_bot = Mock()
+        mock_botasaurus_cls.return_value = mock_bot
+
+        expected_result = {
+            "network_events": [],
+            "actions_executed": 1,
+            "errors": [],
+            "markdown": ""
+        }
+        mock_bot.interact_and_capture.return_value = expected_result
+
+        # Act
+        result = interact_and_capture.invoke({
+            "url": "https://example.com",
+            "actions": [{"action": "wait", "value": 2000}]
+        })
+
+        # Assert
+        assert result["actions_executed"] == 1
+        mock_bot.interact_and_capture.assert_called_once()
 
 
 class TestHttpGetHeaders:
@@ -407,3 +518,7 @@ class TestToolIntegration:
 
         assert http_get_robots.name == "http_get_robots"
         assert http_get_robots.description is not None
+
+        assert interact_and_capture.name == "interact_and_capture"
+        assert interact_and_capture.description is not None
+        assert "UI interactions" in interact_and_capture.description

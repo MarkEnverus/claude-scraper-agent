@@ -224,9 +224,10 @@ def select_top_chunks(
         selected.append(chunk)
         total_tokens += chunk.token_estimate
 
+    avg_score = sum(c.score for c in selected) / len(selected) if selected else 0.0
     logger.info(
         f"Selected {len(selected)} chunks "
-        f"(total {total_tokens} tokens, avg score {sum(c.score for c in selected) / len(selected):.2f})"
+        f"(total {total_tokens} tokens, avg score {avg_score:.2f})"
     )
 
     return selected

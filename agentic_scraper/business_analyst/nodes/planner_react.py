@@ -25,6 +25,7 @@ from agentic_scraper.llm.factory import LLMFactory
 from agentic_scraper.business_analyst.tools import (
     render_page_with_js,
     http_get_headers,
+    http_get_robots,
     extract_links,
 )
 from agentic_scraper.business_analyst.utils.link_scoring import (
@@ -111,6 +112,63 @@ def score_url_priority(
         score -= 5.0
 
     return score
+
+
+# Cache for robots.txt to avoid repeated fetches
+_robots_cache: dict[str, dict] = {}
+
+
+def get_robots_disallowed_paths(seed_url: str) -> list[str]:
+    """Fetch and cache disallowed paths from robots.txt.
+
+    Args:
+        seed_url: Any URL from the domain to fetch robots.txt for
+
+    Returns:
+        List of disallowed path patterns (e.g., ['/admin/', '/private/'])
+    """
+    parsed = urlparse(seed_url)
+    domain = f"{parsed.scheme}://{parsed.netloc}"
+
+    if domain in _robots_cache:
+        return _robots_cache[domain].get('disallowed_paths', [])
+
+    try:
+        result = http_get_robots.invoke(seed_url)
+        _robots_cache[domain] = result
+        logger.info(f"Fetched robots.txt for {domain}: {len(result.get('disallowed_paths', []))} disallowed paths")
+        return result.get('disallowed_paths', [])
+    except Exception as e:
+        logger.warning(f"Failed to fetch robots.txt for {domain}: {e}")
+        _robots_cache[domain] = {'disallowed_paths': [], 'error': str(e)}
+        return []
+
+
+def is_robots_disallowed(url: str, disallowed_paths: list[str]) -> bool:
+    """Check if URL matches any disallowed robots.txt pattern (E5).
+
+    Args:
+        url: URL to check
+        disallowed_paths: List of disallowed path patterns from robots.txt
+
+    Returns:
+        True if URL is disallowed, False otherwise
+    """
+    if not disallowed_paths:
+        return False
+
+    parsed = urlparse(url)
+    path = parsed.path
+
+    for disallowed in disallowed_paths:
+        # Handle wildcard patterns (basic support)
+        if disallowed.endswith('*'):
+            if path.startswith(disallowed[:-1]):
+                return True
+        elif path.startswith(disallowed):
+            return True
+
+    return False
 
 
 def trim_message_history(messages: list, max_messages: int = 12) -> list:
@@ -768,6 +826,20 @@ def planner_react_node(state: BAAnalystState) -> Dict[str, Any]:
         item["url"] for item in queue
         if url_key(item["url"]) not in analyzed_keys
     ]
+
+    # E5: Filter disallowed URLs when respect_robots is enabled
+    if config.respect_robots:
+        seed_url_for_robots = state["seed_url"]
+        disallowed_paths = get_robots_disallowed_paths(seed_url_for_robots)
+        if disallowed_paths:
+            pre_filter_count = len(queue_candidates)
+            queue_candidates = [
+                url for url in queue_candidates
+                if not is_robots_disallowed(url, disallowed_paths)
+            ]
+            filtered_count = pre_filter_count - len(queue_candidates)
+            if filtered_count > 0:
+                logger.info(f"E5 robots.txt: Filtered {filtered_count} URLs (disallowed by robots.txt)")
 
     # Allowed = top K from queue + seed if not analyzed
     allowed_urls = queue_candidates[:10]  # K=10

@@ -465,11 +465,79 @@ def http_get_robots(url: str) -> dict:
         }
 
 
+@tool
+def interact_and_capture(url: str, actions: list[dict]) -> dict:
+    """Execute UI interactions and capture resulting network events.
+
+    Performs deterministic UI actions (click, type, select, scroll) while
+    monitoring network traffic. Use this to discover endpoints triggered by:
+    - Search forms and filters
+    - Date pickers and dropdowns
+    - Pagination controls
+    - Export/download buttons
+    - Any interactive UI element
+
+    Actions are executed sequentially and network events are captured
+    only for NEW requests (excludes those from initial page load).
+
+    Supported action types:
+    - click: Click element by CSS selector or by text content
+    - type: Type text into an input field
+    - select: Select option from dropdown
+    - scroll: Scroll to element or by offset
+    - wait: Wait for specified milliseconds
+
+    Args:
+        url: URL to navigate to before executing actions
+        actions: List of action dicts, each with:
+            - action: "click" | "type" | "select" | "scroll" | "wait"
+            - selector: CSS selector (optional for text-based click)
+            - text: Text to type or text content to click on
+            - value: Value to select, scroll offset, or wait time (ms)
+            - wait_after: Milliseconds to wait after action (default: 500)
+
+    Returns:
+        Dictionary containing:
+        - network_events: List of NEW network events captured during interactions
+        - actions_executed: Count of successfully executed actions
+        - errors: List of action errors (non-fatal)
+        - markdown: Page markdown content after interactions
+
+    Example:
+        >>> # Trigger a search and capture resulting API calls
+        >>> result = interact_and_capture(
+        ...     "https://portal.example.com/data",
+        ...     [
+        ...         {"action": "type", "selector": "#search-input", "text": "electricity"},
+        ...         {"action": "click", "selector": "#search-btn"},
+        ...         {"action": "wait", "value": 2000}
+        ...     ]
+        ... )
+        >>> for event in result["network_events"]:
+        ...     print(f"Discovered: {event['url']}")
+    """
+    logger.info(f"Tool: interact_and_capture({url}, {len(actions)} actions)")
+    try:
+        bot = BotasaurusTool()
+        result = bot.interact_and_capture(url, actions)
+        logger.info(f"Captured {len(result.get('network_events', []))} new network events")
+        return result
+    except Exception as e:
+        logger.error(f"Failed to interact and capture: {e}", exc_info=True)
+        return {
+            "network_events": [],
+            "actions_executed": 0,
+            "errors": [str(e)],
+            "markdown": ""
+        }
+
+
 # Export all tools
 __all__ = [
     "render_page_with_js",
     "extract_links",
     "capture_network_events",
+    "interact_and_capture",
     "http_get_headers",
     "http_get_robots",
 ]
