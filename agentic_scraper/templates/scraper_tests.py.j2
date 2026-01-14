@@ -22,11 +22,7 @@ from {{ filename.replace('.py', '') }} import (
     {{ class_name }},
     ENDPOINTS,
 )
-from sourcing.commons.collection_framework import (
-    DownloadCandidate,
-    CollectedContent,
-    ValidationResult,
-)
+from sourcing.commons.collection_framework import DownloadCandidate
 
 
 # ============================================================================
@@ -43,39 +39,28 @@ def mock_redis():
 
 
 @pytest.fixture
-def mock_s3_manager():
-    """Mock S3Manager."""
-    s3_mock = Mock()
-    s3_mock.upload_file.return_value = "s3://bucket/path/to/file"
-    return s3_mock
-
-
-@pytest.fixture
-def mock_kafka_producer():
-    """Mock KafkaProducer."""
-    kafka_mock = Mock()
-    kafka_mock.send.return_value = None
-    return kafka_mock
-
-
-@pytest.fixture
-def collector(mock_redis, mock_s3_manager, mock_kafka_producer):
+def collector(mock_redis):
     """Create {{ source }} collector instance with mocked dependencies."""
-    return {{ class_name }}(
-        api_key="{{ auth_env_var }}_TEST_KEY",
-        redis_client=mock_redis,
-        s3_manager=mock_s3_manager,
-        kafka_producer=mock_kafka_producer,
-        dgroup="{{ dgroup }}",
-    )
+    with patch("sourcing.commons.s3_utils.boto3"):
+        return {{ class_name }}(
+            dgroup="{{ dgroup }}",
+            s3_bucket="test-bucket",
+            s3_prefix="sourcing",
+            redis_client=mock_redis,
+            environment="dev",
+            kafka_connection_string=None,
+{% if auth_required %}
+            api_key="TEST_API_KEY",
+{% endif %}
+        )
 
 
 @pytest.fixture
 def sample_candidate():
     """Create sample DownloadCandidate."""
     return DownloadCandidate(
-        url="{{ api_base_url }}{{ endpoints[0].path }}",
-        expected_filename="{{ source_snake }}_{{ data_type_snake }}_test_20250101.{{ data_format }}",
+        identifier="{{ source_snake }}_{{ data_type_snake }}_test_20250101.{{ data_format }}",
+        source_location="{{ api_base_url }}{{ endpoints[0].path }}",
         metadata={
             "source": "{{ source_lower }}",
             "data_type": "{{ data_type_lower }}",
@@ -83,6 +68,11 @@ def sample_candidate():
             "date": "2025-01-01",
             "dgroup": "{{ dgroup }}",
         },
+        collection_params={
+            "headers": {},
+            "timeout": {{ timeout_seconds }},
+        },
+        file_date=date(2025, 1, 1),
     )
 
 
@@ -136,20 +126,25 @@ def test_collector_missing_api_key():
     """Test collector raises error without API key."""
 {% if auth_required %}
     with pytest.raises(ValueError, match="API key required"):
-        {{ class_name }}(
-            api_key=None,
-            redis_client=Mock(),
-            s3_manager=Mock(),
-            kafka_producer=Mock(),
-        )
+        with patch("sourcing.commons.s3_utils.boto3"):
+            {{ class_name }}(
+                dgroup="{{ dgroup }}",
+                s3_bucket="test-bucket",
+                s3_prefix="sourcing",
+                redis_client=Mock(),
+                environment="dev",
+                api_key=None,
+            )
 {% else %}
     # No authentication required, should not raise
-    collector = {{ class_name }}(
-        api_key=None,
-        redis_client=Mock(),
-        s3_manager=Mock(),
-        kafka_producer=Mock(),
-    )
+    with patch("sourcing.commons.s3_utils.boto3"):
+        collector = {{ class_name }}(
+            dgroup="{{ dgroup }}",
+            s3_bucket="test-bucket",
+            s3_prefix="sourcing",
+            redis_client=Mock(),
+            environment="dev",
+        )
     assert collector.auth_headers == {}
 {% endif %}
 
@@ -238,6 +233,7 @@ def test_collect_content_success(mock_get, collector, sample_candidate, sample_{
     # Mock successful HTTP response
     mock_response = Mock()
     mock_response.status_code = 200
+    mock_response.raise_for_status = Mock()
 {% if data_format == "json" %}
     mock_response.json.return_value = sample_{{ data_format }}_response
     mock_response.content = json.dumps(sample_{{ data_format }}_response).encode()
@@ -250,50 +246,49 @@ def test_collect_content_success(mock_get, collector, sample_candidate, sample_{
     # Collect content
     content = collector.collect_content(sample_candidate)
 
-    # Verify result
-    assert isinstance(content, CollectedContent)
-    assert content.success is True
-    assert content.content is not None
-    assert content.error_message is None
+    # Verify result - collect_content returns bytes
+    assert isinstance(content, bytes)
+    assert len(content) > 0
 
 
 @patch("requests.get")
 def test_collect_content_http_error(mock_get, collector, sample_candidate):
     """Test content collection with HTTP error."""
+    from sourcing.exceptions import ScrapingError
+
     # Mock HTTP error
     mock_get.side_effect = requests.HTTPError("404 Not Found")
 
-    # Collect content
-    content = collector.collect_content(sample_candidate)
-
-    # Verify error handling
-    assert isinstance(content, CollectedContent)
-    assert content.success is False
-    assert content.error_message is not None
+    # Collect content - should raise ScrapingError
+    with pytest.raises(ScrapingError):
+        collector.collect_content(sample_candidate)
 
 
 @patch("requests.get")
 def test_collect_content_timeout(mock_get, collector, sample_candidate):
     """Test content collection with timeout."""
+    from sourcing.exceptions import ScrapingError
+
     # Mock timeout
     mock_get.side_effect = requests.Timeout("Request timed out")
 
-    # Collect content
-    content = collector.collect_content(sample_candidate)
-
-    # Verify error handling
-    assert isinstance(content, CollectedContent)
-    assert content.success is False
-    assert "timeout" in content.error_message.lower()
+    # Collect content - should raise ScrapingError
+    with pytest.raises(ScrapingError):
+        collector.collect_content(sample_candidate)
 
 
 @patch("requests.get")
 def test_collect_content_retry_logic(mock_get, collector, sample_candidate):
     """Test retry logic on transient errors."""
     # Mock transient error then success
+    mock_response = Mock()
+    mock_response.status_code = 200
+    mock_response.raise_for_status = Mock()
+    mock_response.content = b'{"data": []}'
+
     mock_get.side_effect = [
         requests.ConnectionError("Connection refused"),
-        Mock(status_code=200, content=b'{"data": []}'),
+        mock_response,
     ]
 
     # Collect content
@@ -301,7 +296,7 @@ def test_collect_content_retry_logic(mock_get, collector, sample_candidate):
 
     # Verify retry worked
     assert mock_get.call_count == 2
-    assert content.success is True
+    assert isinstance(content, bytes)
 
 
 # ============================================================================
@@ -316,33 +311,20 @@ def test_validate_content_valid_data(collector, sample_candidate, sample_{{ data
     content_bytes = sample_{{ data_format }}_response.encode()
 {% endif %}
 
-    content = CollectedContent(
-        candidate=sample_candidate,
-        success=True,
-        content=content_bytes,
-        content_hash="abc123",
-    )
+    # validate_content takes (bytes, DownloadCandidate) and returns bool
+    is_valid = collector.validate_content(content_bytes, sample_candidate)
 
-    result = collector.validate_content(content)
-
-    assert isinstance(result, ValidationResult)
-    assert result.is_valid is True
-    assert len(result.errors) == 0
+    assert isinstance(is_valid, bool)
+    assert is_valid is True
 
 
 def test_validate_content_empty_data(collector, sample_candidate):
     """Test validation with empty data."""
-    content = CollectedContent(
-        candidate=sample_candidate,
-        success=True,
-        content=b"",
-        content_hash="",
-    )
+    content_bytes = b""
 
-    result = collector.validate_content(content)
+    is_valid = collector.validate_content(content_bytes, sample_candidate)
 
-    assert result.is_valid is False
-    assert len(result.errors) > 0
+    assert is_valid is False
 
 
 def test_validate_content_invalid_format(collector, sample_candidate):
@@ -358,16 +340,9 @@ def test_validate_content_invalid_format(collector, sample_candidate):
     content_bytes = b"<unclosed"
 {% endif %}
 
-    content = CollectedContent(
-        candidate=sample_candidate,
-        success=True,
-        content=content_bytes,
-        content_hash="abc123",
-    )
+    is_valid = collector.validate_content(content_bytes, sample_candidate)
 
-    result = collector.validate_content(content)
-
-    assert result.is_valid is False
+    assert is_valid is False
 
 
 # ============================================================================
@@ -417,30 +392,36 @@ def test_cli_environment_variables():
 # INTEGRATION TESTS (OPTIONAL)
 # ============================================================================
 
+{% if auth_required %}
 @pytest.mark.skipif(
     os.getenv("{{ auth_env_var }}") is None,
     reason="Requires {{ auth_env_var }} environment variable",
 )
+{% endif %}
 @pytest.mark.integration
 def test_integration_real_api_call():
     """Integration test with real API call.
 
-    This test requires valid credentials and network access.
+    This test requires {% if auth_required %}valid credentials and {% endif %}network access.
+{% if auth_required %}
     Set {{ auth_env_var }} environment variable to run.
+{% endif %}
     """
     import redis
 
     # Use real infrastructure (or test infrastructure)
     redis_client = redis.Redis(host="localhost", port=6379, decode_responses=False)
-    s3_manager = Mock()  # Mock S3 for integration test
-    kafka_producer = None
 
     collector = {{ class_name }}(
-        api_key=os.getenv("{{ auth_env_var }}"),
-        redis_client=redis_client,
-        s3_manager=s3_manager,
-        kafka_producer=kafka_producer,
         dgroup="{{ dgroup }}_test",
+        s3_bucket=os.getenv("S3_BUCKET", "test-bucket"),
+        s3_prefix=os.getenv("S3_PREFIX", "sourcing"),
+        redis_client=redis_client,
+        environment="dev",
+        kafka_connection_string=None,
+{% if auth_required %}
+        api_key=os.getenv("{{ auth_env_var }}"),
+{% endif %}
     )
 
     # Test with recent date
@@ -454,10 +435,10 @@ def test_integration_real_api_call():
     candidate = candidates[0]
     content = collector.collect_content(candidate)
 
-    # Verify successful collection
-    assert content.success is True
-    assert content.content is not None
+    # Verify successful collection - collect_content returns bytes
+    assert isinstance(content, bytes)
+    assert len(content) > 0
 
-    # Validate content
-    validation = collector.validate_content(content)
-    assert validation.is_valid is True
+    # Validate content - validate_content returns bool
+    is_valid = collector.validate_content(content, candidate)
+    assert is_valid is True

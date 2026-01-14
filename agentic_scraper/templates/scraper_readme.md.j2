@@ -83,8 +83,9 @@ Set these environment variables or pass as CLI options:
 | `REDIS_HOST` | No | Redis host (default: localhost) |
 | `REDIS_PORT` | No | Redis port (default: 6379) |
 | `S3_BUCKET` | Yes | S3 bucket for data storage |
-| `KAFKA_BOOTSTRAP_SERVERS` | No | Kafka servers (comma-separated) |
-| `KAFKA_TOPIC` | No | Kafka topic (default: {{ dgroup }}) |
+| `S3_PREFIX` | No | S3 prefix (default: sourcing) |
+| `ENVIRONMENT` | No | Environment: dev/staging/prod (default: dev) |
+| `KAFKA_CONNECTION_STRING` | No | Kafka connection string (kafka://host:port/topic) |
 
 ### Authentication
 
@@ -144,7 +145,7 @@ python {{ filename }} \
     --api-key YOUR_API_KEY \
 {% endif %}
     --s3-bucket your-bucket-name \
-    --kafka-bootstrap-servers localhost:9092
+    --kafka-connection-string kafka://localhost:9092/{{ dgroup }}
 ```
 
 ### CLI Options
@@ -159,8 +160,9 @@ python {{ filename }} \
 | `--redis-host` | Redis host (default: localhost) |
 | `--redis-port` | Redis port (default: 6379) |
 | `--s3-bucket` | S3 bucket for data storage (required) |
-| `--kafka-bootstrap-servers` | Kafka servers (comma-separated) |
-| `--kafka-topic` | Kafka topic for notifications |
+| `--s3-prefix` | S3 prefix for organization (default: sourcing) |
+| `--environment` | Environment: dev/staging/prod (default: dev) |
+| `--kafka-connection-string` | Kafka connection string |
 | `--dgroup` | Data group identifier (default: {{ dgroup }}) |
 | `--debug` | Enable debug logging |
 
@@ -188,16 +190,18 @@ python {{ filename }} \
     --api-key ${{ auth_env_var }} \
 {% endif %}
     --s3-bucket production-data \
-    --kafka-bootstrap-servers kafka1:9092,kafka2:9092 \
+    --kafka-connection-string kafka://kafka1:9092/{{ dgroup }} \
     --debug
 ```
 
 **Using environment variables:**
 
 ```bash
+{% if auth_required %}
 export {{ auth_env_var }}="your-api-key"
+{% endif %}
 export S3_BUCKET="production-data"
-export KAFKA_BOOTSTRAP_SERVERS="localhost:9092"
+export KAFKA_CONNECTION_STRING="kafka://localhost:9092/{{ dgroup }}"
 
 python {{ filename }} \
     --start-date 2025-01-01 \
@@ -293,12 +297,20 @@ pytest tests/{{ source_snake }}/test_{{ filename.replace('.py', '') }}.py -v
 
 ### Run Integration Tests
 
+{% if auth_required %}
 Integration tests require valid credentials:
 
 ```bash
 export {{ auth_env_var }}="your-api-key"
 pytest tests/{{ source_snake }}/test_{{ filename.replace('.py', '') }}.py -v -m integration
 ```
+{% else %}
+Integration tests require network access:
+
+```bash
+pytest tests/{{ source_snake }}/test_{{ filename.replace('.py', '') }}.py -v -m integration
+```
+{% endif %}
 
 ### Test Coverage
 
@@ -350,11 +362,13 @@ Key metrics tracked:
 
 ### Common Issues
 
+{% if auth_required %}
 **Authentication Errors:**
 - Verify {{ auth_env_var }} is set correctly
 - Check API key is valid and not expired
 - Ensure API key has required permissions
 
+{% endif %}
 **Connection Errors:**
 - Verify network connectivity to {{ api_base_url }}
 - Check firewall rules allow outbound HTTPS
@@ -383,7 +397,7 @@ Key metrics tracked:
 To update to a new infrastructure version:
 
 ```bash
-python -m claude_scraper.updater \
+python -m agentic_scraper.updater \
     --scraper {{ filename }} \
     --target-version X.Y.Z
 ```

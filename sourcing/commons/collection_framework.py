@@ -323,7 +323,7 @@ class BaseCollector(ABC):
 
         try:
             # Import here to avoid circular dependency
-            from sourcing.scraping.commons.kafka_utils import (
+            from sourcing.commons.kafka_utils import (
                 KafkaConfiguration,
                 KafkaProducer,
                 ScraperNotificationMessage

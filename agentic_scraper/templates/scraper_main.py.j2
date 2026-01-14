@@ -42,9 +42,6 @@ from sourcing.commons.collection_framework import (
     DownloadCandidate,
 )
 from sourcing.exceptions import ScrapingError
-from sourcing.commons.hash_registry import HashRegistry
-from sourcing.commons.s3_utils import S3Uploader
-from sourcing.commons.kafka_utils import KafkaProducer
 from sourcing.commons.logging_json import setup_logging
 
 logger = setup_logging("INFO")
@@ -366,15 +363,22 @@ class {{ class_name }}(BaseCollector):
     help="S3 bucket for data storage",
 )
 @click.option(
-    "--kafka-bootstrap-servers",
-    envvar="KAFKA_BOOTSTRAP_SERVERS",
-    help="Kafka bootstrap servers (comma-separated)",
+    "--s3-prefix",
+    default="sourcing",
+    envvar="S3_PREFIX",
+    help="S3 prefix for file organization",
 )
 @click.option(
-    "--kafka-topic",
-    default="{{ source_snake }}_{{ data_type_snake }}",
-    envvar="KAFKA_TOPIC",
-    help="Kafka topic for notifications",
+    "--environment",
+    default="dev",
+    envvar="ENVIRONMENT",
+    type=click.Choice(["dev", "staging", "prod"]),
+    help="Environment (dev/staging/prod)",
+)
+@click.option(
+    "--kafka-connection-string",
+    envvar="KAFKA_CONNECTION_STRING",
+    help="Kafka connection string (kafka://host:port/topic?params)",
 )
 @click.option(
     "--dgroup",
@@ -393,8 +397,9 @@ def main(
     redis_host: str,
     redis_port: int,
     s3_bucket: str,
-    kafka_bootstrap_servers: Optional[str],
-    kafka_topic: str,
+    s3_prefix: str,
+    environment: str,
+    kafka_connection_string: Optional[str],
     dgroup: str,
     debug: bool,
 ):
@@ -436,26 +441,23 @@ def main(
             decode_responses=False,
         )
 
-        s3_uploader = S3Uploader(bucket_name=s3_bucket)
+        # Generate version timestamp for this run
+        version = datetime.now(UTC).strftime("%Y%m%d%H%M%SZ")
 
-        kafka_producer = None
-        if kafka_bootstrap_servers:
-            kafka_producer = KafkaProducer(
-                bootstrap_servers=kafka_bootstrap_servers.split(","),
-                topic=kafka_topic,
-            )
-
-        # Initialize collector
+        # Initialize collector (S3/Kafka handled internally by BaseCollector)
         collector = {{ class_name }}(
-            api_key=api_key,
-            redis_client=redis_client,
-            s3_uploader=s3_uploader,
-            kafka_producer=kafka_producer,
             dgroup=dgroup,
+            s3_bucket=s3_bucket,
+            s3_prefix=s3_prefix,
+            redis_client=redis_client,
+            environment=environment,
+            kafka_connection_string=kafka_connection_string,
+            api_key=api_key,
         )
 
         # Run collection
-        results = collector.collect(
+        results = collector.run_collection(
+            version=version,
             start_date=start_date.date(),
             end_date=end_date.date(),
         )
@@ -465,15 +467,15 @@ def main(
             "Collection complete",
             extra={
                 "total_candidates": results["total_candidates"],
-                "new_files": results["new_files"],
-                "duplicates": results["duplicates"],
-                "errors": results["errors"],
+                "collected": results["collected"],
+                "skipped_duplicate": results["skipped_duplicate"],
+                "failed": results["failed"],
             },
         )
 
-        # Exit code based on errors
-        if results["errors"] > 0:
-            logger.warning(f"{results['errors']} errors occurred during collection")
+        # Exit code based on failures
+        if results["failed"] > 0:
+            logger.warning(f"{results['failed']} failures occurred during collection")
             sys.exit(1)
 
     except Exception as e:

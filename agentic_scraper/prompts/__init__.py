@@ -1,7 +1,7 @@
 """Prompt templates for scraper generation.
 
 This package contains prompt templates for code generation.
-BA Analyzer prompts are now in claude_scraper.business_analyst.prompts.
+BA Analyzer prompts are now in agentic_scraper.business_analyst.prompts.
 """
 
 # Import scraper generation prompts (these still exist)

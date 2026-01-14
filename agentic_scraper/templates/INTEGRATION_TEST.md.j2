@@ -10,7 +10,11 @@ This document outlines the integration testing requirements for the {{ source }}
 - Redis (localhost:6379)
 - LocalStack or AWS S3
 - Kafka (optional)
+{% if auth_required %}
 - {{ source }} API access with valid credentials
+{% else %}
+- {{ source }} API access (no authentication required)
+{% endif %}
 
 ### Setup
 
@@ -31,10 +35,14 @@ docker run -d --name kafka \
   confluentinc/cp-kafka
 
 # Configure environment
+{% if auth_required %}
 export {{ auth_env_var }}=YOUR_ACTUAL_API_KEY
+{% endif %}
 export REDIS_HOST=localhost
 export S3_BUCKET=test-bucket
-export KAFKA_BOOTSTRAP_SERVERS=localhost:9092
+export S3_PREFIX=sourcing
+export ENVIRONMENT=dev
+export KAFKA_CONNECTION_STRING=kafka://localhost:9092/{{ dgroup }}
 ```
 
 ## Test Cases
@@ -58,18 +66,20 @@ print("✓ Import successful")
 
 ```python
 import redis
-from sourcing.commons.s3_utils import S3Uploader
-from sourcing.commons.kafka_utils import KafkaProducer
+import os
 
 redis_client = redis.Redis(host='localhost', port=6379, decode_responses=False)
-s3_uploader = S3Uploader(bucket_name='test-bucket')
-kafka_producer = KafkaProducer(bootstrap_servers=['localhost:9092'], topic='test')
 
 collector = {{ class_name }}(
-    api_key="test_key",
+    dgroup="{{ dgroup }}",
+    s3_bucket=os.getenv("S3_BUCKET", "test-bucket"),
+    s3_prefix=os.getenv("S3_PREFIX", "sourcing"),
     redis_client=redis_client,
-    s3_uploader=s3_uploader,
-    kafka_producer=kafka_producer,
+    environment=os.getenv("ENVIRONMENT", "dev"),
+    kafka_connection_string=os.getenv("KAFKA_CONNECTION_STRING"),
+{% if auth_required %}
+    api_key=os.getenv("{{ auth_env_var }}"),
+{% endif %}
 )
 
 print(f"✓ Collector instantiated: {type(collector).__name__}")
@@ -221,31 +231,35 @@ else:
 **Expected**: Message sent successfully (if Kafka configured)
 
 ### Test 9: End-to-End Collection
-**Objective**: Run full collect() method for date range
+**Objective**: Run full run_collection() method for date range
 
 ```python
-from datetime import date
+from datetime import date, datetime, UTC
 
-results = collector.collect(
+# Generate version timestamp
+version = datetime.now(UTC).strftime("%Y%m%d%H%M%SZ")
+
+results = collector.run_collection(
+    version=version,
     start_date=date(2025, 1, 1),
     end_date=date(2025, 1, 2),
 )
 
 print(f"Collection Results:")
 print(f"  Total candidates: {results['total_candidates']}")
-print(f"  New files: {results['new_files']}")
-print(f"  Duplicates: {results['duplicates']}")
-print(f"  Errors: {results['errors']}")
+print(f"  Collected: {results['collected']}")
+print(f"  Skipped duplicates: {results['skipped_duplicate']}")
+print(f"  Failed: {results['failed']}")
 
-assert results['errors'] < results['total_candidates'], "Too many errors"
+assert results['failed'] < results['total_candidates'], "Too many failures"
 
 print("✓ End-to-end collection successful")
 ```
 
 **Expected**:
 - total_candidates > 0
-- new_files + duplicates + errors = total_candidates
-- errors < total_candidates (some success)
+- collected + skipped_duplicate + failed = total_candidates
+- failed < total_candidates (some success)
 
 ## Success Criteria
 
@@ -262,11 +276,13 @@ All tests must pass:
 
 ## Troubleshooting
 
+{% if auth_required %}
 ### Authentication Errors
 - Verify `{{ auth_env_var }}` is set correctly
 - Check API key is valid and has required permissions
 - Review {{ source }} API documentation for registration requirements
 
+{% endif %}
 ### Connection Errors
 - Ensure Redis is running on localhost:6379
 - Verify S3 bucket exists and credentials are valid
