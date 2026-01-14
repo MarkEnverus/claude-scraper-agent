@@ -1,0 +1,140 @@
+[project]
+name = "agentic-scraper"
+version = "2.0.0"
+description = "Type-safe scraper generation with LangGraph + Claude Structured Outputs"
+requires-python = ">=3.11"
+dependencies = [
+    "click>=8.1.0",
+    "langgraph>=0.0.20",
+    "langchain>=0.1.0",
+    "boto3>=1.28.0",
+    "anthropic>=0.18.0",
+    "pydantic>=2.0.0",
+    "rich>=13.0.0",
+    "httpx>=0.25.0",
+    "redis>=5.0.0",
+    "requests>=2.31.0",
+    "jinja2>=3.1.0",
+    "markdownify>=0.11.0",
+    "botasaurus>=4.0.0",
+    "pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "mypy>=1.8.0",
+]
+
+[project.urls]
+homepage = "https://github.com/mark.johnson/claude_scraper_agent"
+repository = "https://github.com/mark.johnson/claude_scraper_agent"
+issues = "https://github.com/mark.johnson/claude_scraper_agent/issues"
+
+[project.scripts]
+agentic-scraper = "agentic_scraper.business_analyst.cli:main"
+
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["agentic_scraper*"]
+exclude = ["tests*", "plugin*", "infrastructure*"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_calls = false
+show_error_codes = true
+pretty = true
+
+exclude = [
+    "tests/fixtures/",
+    "venv/",
+    ".venv/",
+    "build/",
+    "dist/",
+    "plugin/",
+]
+
+[[tool.mypy.overrides]]
+module = "boto3.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "click.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langgraph.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "langchain.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "redis.*"
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = "requests.*"
+ignore_missing_imports = true
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "I",   # isort (import sorting)
+    "N",   # pep8-naming
+    "W",   # pycodestyle warnings
+    "UP",  # pyupgrade (modernize code)
+]
+
+ignore = [
+    "E501",  # Line too long (handled by formatter)
+]
+
+exclude = [
+    ".git",
+    ".venv",
+    "venv",
+    "__pycache__",
+    "build",
+    "dist",
+    "*.egg-info",
+    "tests/fixtures",
+    "plugin",
+]
+
+[tool.ruff.per-file-ignores]
+"__init__.py" = ["F401"]
+"test_*.py" = ["T201"]
+
+[tool.ruff.isort]
+known-first-party = ["agentic_scraper"]
+section-order = ["future", "standard-library", "third-party", "first-party", "local-folder"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "auto"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (real LLM calls, deselect with '-m \"not slow\"')",
+]

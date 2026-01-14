@@ -1,0 +1,490 @@
+"""{{ source }} {{ data_type }} data collector.
+
+This scraper collects {{ data_type }} data from {{ source }}.
+
+Data Source: {{ source }}
+API Base URL: {{ api_base_url }}
+Authentication: {{ auth_method }}
+Data Format: {{ data_format }}
+Update Frequency: {{ update_frequency }}
+
+Collection Method: {{ collection_method }}
+Scraper Type: {{ scraper_type }}
+
+Infrastructure Version: {{ infrastructure_version }}
+Generated: {{ generated_date }}
+Generator: {{ generator_agent }}
+"""
+
+import os
+import sys
+import logging
+import json
+import hashlib
+import time
+from datetime import datetime, timedelta, date, UTC
+from typing import List, Dict, Any, Optional
+
+import click
+import redis
+import requests
+
+# Add sourcing package to path
+sys.path.insert(
+    0,
+    os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../../../../")  # 4 levels up (added dataset dir)
+    ),
+)
+
+from sourcing.commons.collection_framework import (
+    BaseCollector,
+    DownloadCandidate,
+)
+from sourcing.exceptions import ScrapingError
+from sourcing.commons.logging_json import setup_logging
+
+logger = setup_logging("INFO")
+
+
+# ============================================================================
+# ENDPOINT CONFIGURATION
+# ============================================================================
+
+ENDPOINTS = [
+{% for endpoint in endpoints %}
+    {
+        "name": "{{ endpoint.name }}",
+        "display_name": "{{ endpoint.display_name }}",
+        "path": "{{ endpoint.path }}",
+        "method": "{{ endpoint.method }}",
+        "description": "{{ endpoint.description }}",
+        "params": {{ endpoint.params | tojson | replace('true', 'True') | replace('false', 'False') | replace('null', 'None') }},
+        "auth_required": {{ endpoint.auth_required | tojson | replace('true', 'True') | replace('false', 'False') | replace('null', 'None') }},
+    },
+{% endfor %}
+]
+
+
+# ============================================================================
+# COLLECTOR CLASS
+# ============================================================================
+
+class {{ class_name }}(BaseCollector):
+    """Collector for {{ source }} {{ data_type }} data.
+
+    This collector handles:
+    - Authentication via {{ auth_method }}
+    - Data collection from {{ api_base_url }}
+    - Deduplication via Redis hash registry
+    - Storage to S3 with date partitioning
+    - Kafka notifications on new data
+    """
+
+    def __init__(
+        self,
+        dgroup: str,
+        s3_bucket: str,
+        s3_prefix: str,
+        redis_client,
+        environment: str,
+        kafka_connection_string: Optional[str] = None,
+        hash_ttl_days: int = 30,
+        api_key: Optional[str] = None,
+    ):
+        """Initialize {{ source }} collector.
+
+        Args:
+            dgroup: Data group identifier
+            s3_bucket: S3 bucket name for storage
+            s3_prefix: S3 prefix for file organization
+            redis_client: Redis client for hash registry
+            environment: Environment (dev/staging/prod)
+            kafka_connection_string: Optional Kafka connection string
+            hash_ttl_days: TTL for hash registry entries
+            api_key: {{ auth_method }} authentication key
+        """
+        super().__init__(
+            dgroup=dgroup,
+            s3_bucket=s3_bucket,
+            s3_prefix=s3_prefix,
+            redis_client=redis_client,
+            environment=environment,
+            kafka_connection_string=kafka_connection_string,
+            hash_ttl_days=hash_ttl_days,
+        )
+
+        self.api_key = api_key
+        self.base_url = "{{ api_base_url }}"
+        self.endpoints = ENDPOINTS
+        self.timeout = {{ timeout_seconds }}
+        self.retry_attempts = {{ retry_attempts }}
+
+        # Initialize authentication
+        self._init_auth()
+
+    def _init_auth(self) -> None:
+        """Initialize authentication configuration."""
+{% if auth_required %}
+        if not self.api_key:
+            raise ValueError(
+                "API key required for {{ source }} collector. "
+                "Set {{ auth_env_var }} environment variable or pass api_key parameter."
+            )
+
+        # Setup authentication headers
+{% if auth_method == "API_KEY" %}
+        self.auth_headers = {
+            "{{ auth_header_name }}": self.api_key,
+        }
+{% elif auth_method == "BEARER_TOKEN" %}
+        self.auth_headers = {
+            "Authorization": f"Bearer {self.api_key}",
+        }
+{% elif auth_method == "BASIC_AUTH" %}
+        import base64
+        credentials = base64.b64encode(self.api_key.encode()).decode()
+        self.auth_headers = {
+            "Authorization": f"Basic {credentials}",
+        }
+{% else %}
+        # Custom authentication logic (AI-generated)
+        {{ init_code | dedent | indent(8) }}
+{% endif %}
+{% else %}
+        # No authentication required
+        self.auth_headers = {}
+{% endif %}
+
+        logger.info(
+            "Initialized {{ source }} collector",
+            extra={
+                "base_url": self.base_url,
+                "auth_method": "{{ auth_method }}",
+                "endpoints": len(self.endpoints),
+            },
+        )
+
+    def generate_candidates(
+        self,
+        start_date: date,
+        end_date: date,
+    ) -> List[DownloadCandidate]:
+        """Generate download candidates for date range.
+
+        Args:
+            start_date: Start date for data collection
+            end_date: End date for data collection
+
+        Returns:
+            List of DownloadCandidate objects
+        """
+        candidates = []
+        current_date = start_date
+
+        while current_date <= end_date:
+            for endpoint in self.endpoints:
+                # Build URL with date parameters
+                url = self._build_url(endpoint, current_date)
+
+                # Create candidate with correct DownloadCandidate fields
+                candidate = DownloadCandidate(
+                    identifier=self._generate_filename(
+                        endpoint["name"],
+                        current_date,
+                    ),
+                    source_location=url,
+                    metadata={
+                        "source": "{{ source_lower }}",
+                        "data_type": "{{ data_type_lower }}",
+                        "endpoint": endpoint["name"],
+                        "date": current_date.isoformat(),
+                        "dgroup": self.dgroup,
+                    },
+                    collection_params={
+                        "headers": self.auth_headers,
+                        "timeout": self.timeout,
+                    },
+                    file_date=current_date,
+                )
+                candidates.append(candidate)
+
+            current_date += timedelta(days=1)
+
+        logger.info(
+            f"Generated {len(candidates)} candidates",
+            extra={
+                "start_date": start_date.isoformat(),
+                "end_date": end_date.isoformat(),
+                "endpoints": len(self.endpoints),
+            },
+        )
+
+        return candidates
+
+    def _build_url(self, endpoint: Dict[str, Any], target_date: date) -> str:
+        """Build URL for endpoint with date parameters.
+
+        Args:
+            endpoint: Endpoint configuration
+            target_date: Target date for data
+
+        Returns:
+            Fully-qualified URL with query parameters
+        """
+        path = endpoint["path"]
+
+        # Replace date placeholders in path (for path parameters)
+        path = path.replace("{date}", target_date.strftime("%Y-%m-%d"))
+        path = path.replace("{year}", str(target_date.year))
+        path = path.replace("{month}", f"{target_date.month:02d}")
+        path = path.replace("{day}", f"{target_date.day:02d}")
+
+        # Build query parameters from endpoint params configuration
+        query_params = {}
+        params_config = endpoint.get("params", {})
+
+        for param_name, param_config in params_config.items():
+            if not isinstance(param_config, dict):
+                continue
+
+            # Check if this param is required or commonly used
+            is_required = param_config.get("required", False)
+            param_type = param_config.get("type", "string")
+
+            # Add date-related parameters
+            if param_name in ["date", "marketDate", "settlementDate", "startDate"]:
+                query_params[param_name] = target_date.strftime("%Y-%m-%d")
+            elif param_name == "endDate":
+                # For endDate, use same as startDate by default
+                query_params[param_name] = target_date.strftime("%Y-%m-%d")
+            # Add other required parameters with example values if available
+            elif is_required and "example" in param_config:
+                example_val = param_config["example"]
+                if example_val is not None:
+                    query_params[param_name] = str(example_val)
+
+        # Construct final URL with query string
+        url = f"{self.base_url}{path}"
+        if query_params:
+            query_string = "&".join(f"{k}={v}" for k, v in query_params.items())
+            url = f"{url}?{query_string}"
+
+        return url
+
+    def _generate_filename(self, endpoint_name: str, target_date: date) -> str:
+        """Generate expected filename for downloaded content.
+
+        Args:
+            endpoint_name: Name of endpoint
+            target_date: Target date
+
+        Returns:
+            Expected filename
+        """
+        date_str = target_date.strftime("%Y%m%d")
+        return f"{{ source_snake }}_{{ data_type_snake }}_{endpoint_name}_{date_str}.{{ data_format }}"
+
+    def collect_content(self, candidate: DownloadCandidate) -> bytes:
+        """Collect content from candidate URL.
+
+        This method handles HTTP requests, retries, error handling,
+        and content extraction.
+
+        Args:
+            candidate: Download candidate with URL and metadata
+
+        Returns:
+            Raw bytes of collected content
+
+        Raises:
+            ScrapingError: On collection failure
+        """
+        # AI-generated collection logic
+        {{ collect_content_code | dedent | indent(8) }}
+
+    def validate_content(self, content: bytes, candidate: DownloadCandidate) -> bool:
+        """Validate collected content.
+
+        This method checks that downloaded content meets quality requirements:
+        - Correct data format
+        - Required fields present
+        - Data integrity checks
+
+        Args:
+            content: Collected content (raw bytes)
+            candidate: Candidate that was collected
+
+        Returns:
+            True if valid, False otherwise
+        """
+        # AI-generated validation logic
+        {{ validate_content_code | dedent | indent(8) }}
+
+
+# ============================================================================
+# CLI INTERFACE
+# ============================================================================
+
+@click.command()
+@click.option(
+    "--start-date",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    required=True,
+    help="Start date for data collection (YYYY-MM-DD)",
+)
+@click.option(
+    "--end-date",
+    type=click.DateTime(formats=["%Y-%m-%d"]),
+    required=True,
+    help="End date for data collection (YYYY-MM-DD)",
+)
+@click.option(
+    "--api-key",
+    envvar="{{ auth_env_var }}",
+    help="{{ auth_method }} authentication key (can use {{ auth_env_var }} env var)",
+)
+@click.option(
+    "--redis-host",
+    default="localhost",
+    envvar="REDIS_HOST",
+    help="Redis host for hash registry",
+)
+@click.option(
+    "--redis-port",
+    default=6379,
+    envvar="REDIS_PORT",
+    help="Redis port",
+)
+@click.option(
+    "--s3-bucket",
+    required=True,
+    envvar="S3_BUCKET",
+    help="S3 bucket for data storage",
+)
+@click.option(
+    "--s3-prefix",
+    default="sourcing",
+    envvar="S3_PREFIX",
+    help="S3 prefix for file organization",
+)
+@click.option(
+    "--environment",
+    default="dev",
+    envvar="ENVIRONMENT",
+    type=click.Choice(["dev", "staging", "prod"]),
+    help="Environment (dev/staging/prod)",
+)
+@click.option(
+    "--kafka-connection-string",
+    envvar="KAFKA_CONNECTION_STRING",
+    help="Kafka connection string (kafka://host:port/topic?params)",
+)
+@click.option(
+    "--dgroup",
+    default="{{ dgroup }}",
+    help="Data group identifier",
+)
+@click.option(
+    "--debug",
+    is_flag=True,
+    help="Enable debug logging",
+)
+def main(
+    start_date: datetime,
+    end_date: datetime,
+    api_key: str,
+    redis_host: str,
+    redis_port: int,
+    s3_bucket: str,
+    s3_prefix: str,
+    environment: str,
+    kafka_connection_string: Optional[str],
+    dgroup: str,
+    debug: bool,
+):
+    """{{ source }} {{ data_type }} data collector.
+
+    Collects {{ data_type }} data from {{ source }} for the specified date range.
+    Uses Redis for deduplication, S3 for storage, and Kafka for notifications.
+
+    Example:
+
+        python {{ filename }} \\
+            --start-date 2025-01-01 \\
+            --end-date 2025-01-31 \\
+            --api-key YOUR_API_KEY \\
+            --s3-bucket your-bucket \\
+            --kafka-bootstrap-servers localhost:9092
+    """
+    # Configure logging
+    log_level = logging.DEBUG if debug else logging.INFO
+    logging.basicConfig(
+        level=log_level,
+        format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    )
+
+    logger.info(
+        "Starting {{ source }} {{ data_type }} collector",
+        extra={
+            "start_date": start_date.date().isoformat(),
+            "end_date": end_date.date().isoformat(),
+            "dgroup": dgroup,
+        },
+    )
+
+    try:
+        # Initialize infrastructure
+        redis_client = redis.Redis(
+            host=redis_host,
+            port=redis_port,
+            decode_responses=False,
+        )
+
+        # Generate version timestamp for this run
+        version = datetime.now(UTC).strftime("%Y%m%d%H%M%SZ")
+
+        # Initialize collector (S3/Kafka handled internally by BaseCollector)
+        collector = {{ class_name }}(
+            dgroup=dgroup,
+            s3_bucket=s3_bucket,
+            s3_prefix=s3_prefix,
+            redis_client=redis_client,
+            environment=environment,
+            kafka_connection_string=kafka_connection_string,
+            api_key=api_key,
+        )
+
+        # Run collection
+        results = collector.run_collection(
+            version=version,
+            start_date=start_date.date(),
+            end_date=end_date.date(),
+        )
+
+        # Log summary
+        logger.info(
+            "Collection complete",
+            extra={
+                "total_candidates": results["total_candidates"],
+                "collected": results["collected"],
+                "skipped_duplicate": results["skipped_duplicate"],
+                "failed": results["failed"],
+            },
+        )
+
+        # Exit code based on failures
+        if results["failed"] > 0:
+            logger.warning(f"{results['failed']} failures occurred during collection")
+            sys.exit(1)
+
+    except Exception as e:
+        logger.error(
+            f"Fatal error in {{ source }} collector: {e}",
+            exc_info=True,
+        )
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

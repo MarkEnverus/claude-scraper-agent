@@ -1,0 +1,300 @@
+# Integration Test Protocol: {{ source }} - {{ dataset }}
+
+## Overview
+
+This document outlines the integration testing requirements for the {{ source }} {{ dataset }} data collector.
+
+## Test Environment
+
+### Required Services
+- Redis (localhost:6379)
+- LocalStack or AWS S3
+- Kafka (optional)
+{% if auth_required %}
+- {{ source }} API access with valid credentials
+{% else %}
+- {{ source }} API access (no authentication required)
+{% endif %}
+
+### Setup
+
+```bash
+# Start Redis
+docker run -d --name redis -p 6379:6379 redis
+
+# Start LocalStack (S3)
+docker run -d --name localstack \
+  -p 4566:4566 \
+  -e SERVICES=s3 \
+  localstack/localstack
+
+# Start Kafka (optional)
+docker run -d --name kafka \
+  -p 9092:9092 \
+  -e KAFKA_ZOOKEEPER_CONNECT=zookeeper:2181 \
+  confluentinc/cp-kafka
+
+# Configure environment
+{% if auth_required %}
+export {{ auth_env_var }}=YOUR_ACTUAL_API_KEY
+{% endif %}
+export REDIS_HOST=localhost
+export S3_BUCKET=test-bucket
+export S3_PREFIX=sourcing
+export ENVIRONMENT=dev
+export KAFKA_CONNECTION_STRING=kafka://localhost:9092/{{ dgroup }}
+```
+
+## Test Cases
+
+### Test 1: Basic Import
+**Objective**: Verify scraper can be imported without errors
+
+```python
+import sys
+sys.path.insert(0, "../../../../")
+
+from sourcing.scraping.{{ source_snake }}.{{ dataset_snake }}.main import {{ class_name }}
+
+print("✓ Import successful")
+```
+
+**Expected**: No ImportError
+
+### Test 2: Instantiation
+**Objective**: Verify collector instantiates with all dependencies
+
+```python
+import redis
+import os
+
+redis_client = redis.Redis(host='localhost', port=6379, decode_responses=False)
+
+collector = {{ class_name }}(
+    dgroup="{{ dgroup }}",
+    s3_bucket=os.getenv("S3_BUCKET", "test-bucket"),
+    s3_prefix=os.getenv("S3_PREFIX", "sourcing"),
+    redis_client=redis_client,
+    environment=os.getenv("ENVIRONMENT", "dev"),
+    kafka_connection_string=os.getenv("KAFKA_CONNECTION_STRING"),
+{% if auth_required %}
+    api_key=os.getenv("{{ auth_env_var }}"),
+{% endif %}
+)
+
+print(f"✓ Collector instantiated: {type(collector).__name__}")
+```
+
+**Expected**: No exceptions, collector object created
+
+### Test 3: Candidate Generation
+**Objective**: Verify generate_candidates() creates proper DownloadCandidate objects
+
+```python
+from datetime import date
+
+candidates = collector.generate_candidates(
+    start_date=date(2025, 1, 1),
+    end_date=date(2025, 1, 2),
+)
+
+print(f"Generated {len(candidates)} candidates")
+for candidate in candidates[:3]:  # Show first 3
+    print(f"  - {candidate.identifier}")
+    print(f"    URL: {candidate.source_location}")
+    print(f"    Date: {candidate.file_date}")
+    assert hasattr(candidate, 'identifier')
+    assert hasattr(candidate, 'source_location')
+    assert hasattr(candidate, 'file_date')
+
+print("✓ Candidate generation successful")
+```
+
+**Expected**: List of DownloadCandidate objects with correct fields
+
+### Test 4: Content Collection
+**Objective**: Verify collect_content() downloads data as bytes
+
+```python
+candidate = candidates[0]
+
+try:
+    content = collector.collect_content(candidate)
+
+    assert isinstance(content, bytes), f"Expected bytes, got {type(content)}"
+    assert len(content) > 0, "Content is empty"
+
+    print(f"✓ Collected {len(content)} bytes from {candidate.identifier}")
+except Exception as e:
+    print(f"✗ Collection failed: {e}")
+    # Note: May fail due to authentication - check error message
+```
+
+**Expected**:
+- Returns bytes
+- Content is not empty
+- Or raises ScrapingError with clear message (if auth fails)
+
+### Test 5: Content Validation
+**Objective**: Verify validate_content() returns bool
+
+```python
+if 'content' in locals():
+    is_valid = collector.validate_content(content, candidate)
+
+    assert isinstance(is_valid, bool), f"Expected bool, got {type(is_valid)}"
+
+    print(f"✓ Validation returned: {is_valid}")
+else:
+    print("⊘ Skipped - no content collected in Test 4")
+```
+
+**Expected**: Returns True or False (bool)
+
+### Test 6: Redis Deduplication
+**Objective**: Verify hash registry prevents duplicate downloads
+
+```python
+from sourcing.commons.hash_registry import HashRegistry
+import hashlib
+
+registry = HashRegistry(redis_client, namespace="{{ source_snake }}_{{ dataset_snake }}")
+
+# Generate hash
+content_hash = hashlib.sha256(content).hexdigest()
+
+# First check - should be new
+is_new1 = registry.is_new_hash(content_hash)
+print(f"First check is_new: {is_new1}")
+
+# Register it
+registry.register_hash(content_hash, candidate.identifier)
+
+# Second check - should be duplicate
+is_new2 = registry.is_new_hash(content_hash)
+print(f"Second check is_new: {is_new2}")
+
+assert is_new1 == True, "First check should be new"
+assert is_new2 == False, "Second check should be duplicate"
+
+print("✓ Deduplication working")
+```
+
+**Expected**: First check returns True, second returns False
+
+### Test 7: S3 Upload
+**Objective**: Verify data uploads to S3 with correct partitioning
+
+```python
+from datetime import date
+
+s3_key = s3_uploader.generate_s3_key(
+    dgroup="{{ dgroup }}",
+    source="{{ source_snake }}",
+    dataset="{{ dataset_snake }}",
+    file_date=date(2025, 1, 1),
+    filename=candidate.identifier,
+)
+
+print(f"S3 Key: {s3_key}")
+
+# Upload
+success = s3_uploader.upload_content(content, s3_key)
+assert success, "S3 upload failed"
+
+print("✓ S3 upload successful")
+```
+
+**Expected**:
+- S3 key follows pattern: `{{ dgroup }}/{{ source_snake }}_{{ dataset_snake }}/YYYY/MM/DD/filename.{{ data_format }}`
+- Upload succeeds
+
+### Test 8: Kafka Notification
+**Objective**: Verify Kafka messages sent on new data
+
+```python
+if kafka_producer:
+    message = {
+        "source": "{{ source_snake }}",
+        "dataset": "{{ dataset_snake }}",
+        "file": candidate.identifier,
+        "s3_key": s3_key,
+        "timestamp": candidate.file_date.isoformat(),
+    }
+
+    kafka_producer.send_message(message)
+    print("✓ Kafka notification sent")
+else:
+    print("⊘ Kafka not configured - skipped")
+```
+
+**Expected**: Message sent successfully (if Kafka configured)
+
+### Test 9: End-to-End Collection
+**Objective**: Run full run_collection() method for date range
+
+```python
+from datetime import date, datetime, UTC
+
+# Generate version timestamp
+version = datetime.now(UTC).strftime("%Y%m%d%H%M%SZ")
+
+results = collector.run_collection(
+    version=version,
+    start_date=date(2025, 1, 1),
+    end_date=date(2025, 1, 2),
+)
+
+print(f"Collection Results:")
+print(f"  Total candidates: {results['total_candidates']}")
+print(f"  Collected: {results['collected']}")
+print(f"  Skipped duplicates: {results['skipped_duplicate']}")
+print(f"  Failed: {results['failed']}")
+
+assert results['failed'] < results['total_candidates'], "Too many failures"
+
+print("✓ End-to-end collection successful")
+```
+
+**Expected**:
+- total_candidates > 0
+- collected + skipped_duplicate + failed = total_candidates
+- failed < total_candidates (some success)
+
+## Success Criteria
+
+All tests must pass:
+- [ ] Test 1: Import successful
+- [ ] Test 2: Instantiation successful
+- [ ] Test 3: Candidates generated correctly
+- [ ] Test 4: Content collected as bytes
+- [ ] Test 5: Validation returns bool
+- [ ] Test 6: Deduplication working
+- [ ] Test 7: S3 upload successful
+- [ ] Test 8: Kafka notification sent (if configured)
+- [ ] Test 9: End-to-end collection successful
+
+## Troubleshooting
+
+{% if auth_required %}
+### Authentication Errors
+- Verify `{{ auth_env_var }}` is set correctly
+- Check API key is valid and has required permissions
+- Review {{ source }} API documentation for registration requirements
+
+{% endif %}
+### Connection Errors
+- Ensure Redis is running on localhost:6379
+- Verify S3 bucket exists and credentials are valid
+- Check Kafka broker is accessible (if using Kafka)
+
+### Import Errors
+- Verify you're running from correct directory
+- Check `sourcing/commons/` has all required files
+- Ensure sys.path includes project root
+
+## Notes
+
+- Generated: {{ generated_date }}
+- Infrastructure Version: {{ infrastructure_version }}
+- This test protocol follows the standards defined in Jinja's INTEGRATION.md framework
