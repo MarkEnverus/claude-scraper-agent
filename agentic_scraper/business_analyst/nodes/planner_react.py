@@ -36,6 +36,10 @@ from agentic_scraper.business_analyst.utils.api_call_extractor import (
     extract_api_calls_from_network_events,
     prioritize_apim_calls,
 )
+from agentic_scraper.business_analyst.tracing import (
+    build_planner_run_config,
+    should_enable_tracing,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -1072,8 +1076,23 @@ REMEMBER: Stay focused on the primary API/data source - do not wander to other A
     try:
         logger.info("Invoking agent with ReAct pattern")
 
+        # Build thread config with tracing support
+        seed_url = state["seed_url"]
+        tracing_enabled = should_enable_tracing()
+
+        if tracing_enabled:
+            # Use standardized planner run config for trace alignment
+            thread_config = build_planner_run_config(
+                seed_url=seed_url,
+                config=config,
+                parent_thread_id=None,  # Parent thread_id not directly available in node
+            )
+            logger.debug(f"Planner thread_id: {thread_config['configurable']['thread_id']}")
+        else:
+            # Minimal config without tracing
+            thread_config = {"configurable": {"thread_id": f"analysis-local"}}
+
         # Get full message history from checkpointer and trim to prevent context overflow
-        thread_config = {"configurable": {"thread_id": f"analysis-{state['seed_url']}"}}
         try:
             agent_state = agent.get_state(config=thread_config)
             full_messages = agent_state.values.get("messages", []) if hasattr(agent_state, 'values') else []

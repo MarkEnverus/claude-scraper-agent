@@ -141,11 +141,12 @@ Even if you keep `LANGSMITH_TRACING=true`, always also set:
 This avoids the “it works for one component but not the other” problem across LangChain/LangGraph versions.
 
 ## Deliverable checklist for the implementing agent
-- [ ] Tracing module added (decision + env normalization + run config builder)
-- [ ] `agentic_scraper/business_analyst/cli.py` uses it to configure graph invoke
-- [ ] `agentic_scraper/business_analyst/nodes/planner_react.py` aligns agent invoke config to the same run context
-- [ ] `BAConfig.enable_langsmith` actually controls behavior
-- [ ] PII redaction behavior tied to `BAConfig.enable_pii_redaction`
-- [ ] Doc section added explaining how to use it
-- [ ] No secrets logged; no keys in repo; tests/CI safe by default
+- [x] Tracing module added (decision + env normalization + run config builder) - `agentic_scraper/business_analyst/tracing.py`
+- [x] `agentic_scraper/business_analyst/cli.py` uses it to configure graph invoke
+- [x] `agentic_scraper/business_analyst/nodes/planner_react.py` aligns agent invoke config to the same run context
+- [x] `BAConfig.enable_langsmith` actually controls behavior
+- [x] PII redaction behavior tied to `BAConfig.enable_pii_redaction`
+- [x] Doc section added explaining how to use it - See "Observability / LangSmith Tracing" section in `BA_AGENT_FLOW.md`
+- [x] No secrets logged; no keys in repo; tests/CI safe by default
+- [x] Unit tests added - `tests/business_analyst/test_tracing.py` (27 tests)
 

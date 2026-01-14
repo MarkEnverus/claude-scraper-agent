@@ -18,6 +18,11 @@ from typing import Optional
 from agentic_scraper.business_analyst.config import BAConfig
 from agentic_scraper.business_analyst.graph import create_ba_graph
 from agentic_scraper.business_analyst.state import BAAnalystState
+from agentic_scraper.business_analyst.tracing import (
+    build_run_config,
+    prepare_langsmith_env,
+    should_enable_tracing,
+)
 
 
 # Configure logging
@@ -141,8 +146,19 @@ def run_analysis(
     Returns:
         Final state dictionary with analysis results
     """
+    if config is None:
+        config = BAConfig()
+
     logger.info(f"Starting BA Analyst: {seed_url}")
     logger.info(f"Max depth: {max_depth}, Allowed domains: {allowed_domains}")
+
+    # Configure LangSmith tracing (if enabled)
+    tracing_enabled = should_enable_tracing()
+    if tracing_enabled:
+        prepare_langsmith_env()
+        logger.info("LangSmith tracing enabled")
+    else:
+        logger.debug("LangSmith tracing disabled")
 
     # Create graph
     graph = create_ba_graph()
@@ -155,13 +171,25 @@ def run_analysis(
         config=config
     )
 
-    # Configure LangGraph execution
-    graph_config = {
-        "configurable": {
-            "thread_id": f"ba-analyst-{seed_url}"
-        },
-        "recursion_limit": 150  # Support deep portal exploration (50 pages × ~3 cycles/page)
-    }
+    # Build run configuration with tracing support
+    recursion_limit = 150  # Support deep portal exploration (50 pages × ~3 cycles/page)
+
+    if tracing_enabled:
+        # Use standardized run config with tags, metadata, sanitized thread_id
+        graph_config = build_run_config(
+            seed_url=seed_url,
+            config=config,
+            recursion_limit=recursion_limit,
+        )
+        logger.debug(f"Run config: thread_id={graph_config['configurable']['thread_id']}")
+    else:
+        # Minimal config without tracing metadata
+        graph_config = {
+            "configurable": {
+                "thread_id": f"ba-analyst-local"
+            },
+            "recursion_limit": recursion_limit
+        }
 
     # Run graph
     logger.info("Executing BA Analyst graph...")

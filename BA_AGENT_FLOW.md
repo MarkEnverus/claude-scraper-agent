@@ -78,3 +78,72 @@ graph TD;
 - `summarizer`
   - Produces audit outputs (`site_report.json/md`) and generator-ready artifacts (`validated_datasource_spec.json`, `endpoint_inventory.json`, `executive_data_summary.md`).
 
+## Observability / LangSmith Tracing
+
+The BA agent supports full LangSmith tracing for observability, debugging, and run analysis. Tracing is automatically enabled when an API key is present.
+
+### Quick Start
+
+Set environment variables before running:
+
+```bash
+export LANGSMITH_API_KEY="lsv2_pt_..."
+export LANGSMITH_PROJECT="ba-analyst"
+
+# Run analysis with tracing
+agentic-scraper analyze https://api.example.com/docs
+```
+
+### Environment Variables
+
+**Required** (for tracing to work):
+```bash
+LANGSMITH_API_KEY=lsv2_pt_...
+# or
+LANGCHAIN_API_KEY=lsv2_pt_...
+```
+
+**Optional**:
+```bash
+# Project name (default: "ba-analyst")
+LANGSMITH_PROJECT=my-project
+
+# Endpoint (default: https://api.smith.langchain.com)
+LANGSMITH_ENDPOINT=https://api.smith.langchain.com
+```
+
+### Disabling Tracing
+
+**Option 1**: Don't set API key
+- If no `LANGSMITH_API_KEY` or `LANGCHAIN_API_KEY` is set, tracing is automatically disabled
+
+**Option 2**: For tests (in conftest.py)
+```python
+from agentic_scraper.business_analyst.tracing import disable_tracing_for_tests
+disable_tracing_for_tests()
+```
+
+### What You'll See in LangSmith
+
+When tracing is enabled, each run includes:
+
+- **Run name**: `BA Analyze: <hostname>` (e.g., "BA Analyze: api.example.com")
+- **Thread ID**: Sanitized identifier (hash-based)
+- **Tags**: `component=ba`, `subsystem=langgraph`, `provider=bedrock`
+- **Metadata**:
+  - `seed_url` (full URL with query params)
+  - `hostname`
+  - `max_depth`, `max_steps`, `recursion_limit`
+  - `render_mode`
+  - `model_fast`, `model_reasoning`, `model_vision`
+  - `package_version` (if available)
+
+Child runs for:
+- Planner agent invocations (`Planner: <hostname>`)
+- Tool calls (`render_page_with_js`, `http_get_headers`, `extract_links`)
+- LLM calls (via Bedrock)
+
+### Version Compatibility
+
+The tracing module bridges both LangSmith-style and LangChain-style environment variables to ensure compatibility across different library versions. Both sets of env vars are synchronized automatically.
+

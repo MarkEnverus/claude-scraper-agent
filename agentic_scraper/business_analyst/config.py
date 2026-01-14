@@ -100,8 +100,6 @@ class BAConfig(BaseModel):
     reasoning_budget: int = Field(2048, description="Reasoning token budget for extended thinking")
 
     # Observability
-    enable_langsmith: bool = Field(True, description="Enable LangSmith tracing")
-    enable_pii_redaction: bool = Field(True, description="Enable PII redaction in logs")
     log_level: str = Field("INFO", description="Logging level: DEBUG, INFO, WARNING, ERROR")
 
     @model_validator(mode='after')
